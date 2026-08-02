@@ -1,0 +1,180 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nanu Investment Pvt. Ltd</title>
+  
+    <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
+
+
+  <!-- Link to your external CSS file -->
+  <link rel="stylesheet" href="{% static 'style.css' %}">
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <div class="logo-area">
+      <img src="{% static 'logo.jpeg' %}" alt="Co-operative Logo" class="brand-logo">
+    </div>
+    <div class="contact-info">
+      <div class="contact-item">
+        <strong>✆ +977 9744360267</strong>
+      </div>
+      <div class="contact-item">
+        <strong>📌 Barahathawa-12, Sarlahi, Nepal</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation -->
+  <div class="navbar">
+    <button class="menu-toggle">☰ MENU</button>
+    <div class="nav-links">
+      <a href="{% url 'home' %}">HOME</a>
+      <a href="#">ABOUT US</a>
+      <a href="#">SERVICES</a>
+      <a href="#">NEWS & ACTIVITIES</a>
+      <a href="#">NOTICE</a>
+      <a href="#">DOWNLOADS</a>
+      <a href="#">GALLERY</a>
+      <a href="#">CONSUMER INFO</a>
+      <a href="#">CONTACT</a>
+    </div>
+  </div>
+
+  <div class="accent-line"></div>
+
+<!-- Image Slider Section -->
+<div class="slider-container">
+  <div class="slides">
+    <!-- Slide 1 -->
+    <div class="slide active">
+      <img src="{% static 'banner1.png' %}" alt="Banner 1">
+    </div>
+    <!-- Slide 2 -->
+    <div class="slide">
+      <img src="{% static 'banner2.png' %}" alt="Banner 2">
+    </div>
+    <!-- Slide 3 -->
+    <div class="slide">
+      <img src="{% static 'banner3.png' %}" alt="Banner 3">
+    </div>
+  </div>
+
+  <!-- Left and Right Arrows -->
+  <button class="slider-btn prev-btn">&#10094;</button>
+  <button class="slider-btn next-btn">&#10095;</button>
+
+  <!-- Dot Indicators (Optional) -->
+  <div class="slider-dots">
+    <span class="dot active" data-slide="0"></span>
+    <span class="dot" data-slide="1"></span>
+    <span class="dot" data-slide="2"></span>
+  </div>
+</div>
+
+  <!-- Main Content: Welcome & Sidebar -->
+  <div class="main-container">
+    
+    <!-- Welcome Section (Left) -->
+    <div class="welcome-section">
+      <h1>Welcome To Our Co-operative</h1>
+      <p class="subtitle">"सहकारीको विकास सँगै सामाजिक बिकासमा समर्पित" <br> Since 2025</p>
+      <p>
+        Respecting to the true spirit of Co-operative revolution, our Saving and Credit Co-operative Society Ltd. is established under the Co-operative Act, with the slogan "your satisfaction is our destination". We have been operating with numerous financial opportunities to our needy members and society as a whole, ignoring cheap assurances of the market.
+      </p>
+      <a href="#" class="btn-read-more">READ MORE</a>
+    </div>
+
+<!-- Chairperson / Owner Section -->
+<div class="owner-section">
+  <div class="owner-container">
+    <div class="owner-photo-box">
+      <!-- Replace 'owner.png' with the actual photo filename -->
+      <img src="{% static 'owner.png' %}" alt="Chairman / Founder" class="owner-photo">
+    </div>
+    <div class="owner-info">
+      <h3>Mr. Krishna Ray</h3>
+      <p class="owner-title">Founder Chairman / President</p>
+      <p class="owner-message">
+        "Our journey began with a vision to uplift grassroots communities through mutual financial cooperation. Over the decades, we have remained deeply committed to transparency, members' prosperity, and economic resilience. We thank all our members and stakeholders for trusting us as your financial partner."
+      </p>
+      <div class="owner-details-grid">
+        <span><strong>Experience:</strong> 5+ Years in Co-operative Sector</span>
+        <span><strong>Email:</strong> ka1234yad@gmail.com</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+  <!-- Services Section -->
+  <div class="services-section">
+    <h2 class="section-title">Our Services</h2>
+    <div class="services-grid">
+      
+      <!-- Service 1 -->
+      <div class="service-card">
+        <div class="service-icon"></div>
+        <h4>Smart Service</h4>
+        <p>In our continuous efforts to provide innovative products to our members, we have launched smart digital services.</p>
+      </div>
+
+      <!-- Service 2 -->
+      <div class="service-card">
+        <div class="service-icon"></div>
+        <h4>Saving Deposit</h4>
+        <p>Various types of saving accounts including Normal Saving, Super Saving, and more with competitive interest rates.</p>
+      </div>
+
+      <!-- Service 3 -->
+      <div class="service-card">
+        <div class="service-icon"></div>
+        <h4>Loan Services</h4>
+        <p>Providing Housing Loans, Education Loans, and Business Loans on a diminishing rate basis.</p>
+      </div>
+
+
+
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-grid">
+      <div>
+        <h4>About Us</h4>
+        <p style="font-size: 0.9rem; color: #ccc;">Our Saving and Credit Co-operative Society Ltd. has been operating with financial opportunities for its needy members & society.</p>
+      </div>
+      <div>
+        <h4>Useful Links</h4>
+        <ul>
+          <li><a href="#">Home</a></li>
+          <li><a href="#">About Us</a></li>
+          <li><a href="#">News & Activities</a></li>
+          <li><a href="#">Saving Account</a></li>
+          <li><a href="#">Loan & Advances</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contact Us</h4>
+        <ul>
+          <li>📌 Address: Kathmandu, Nepal</li>
+          <li>✆ Phone: +977 9744360267</li>
+          <li>✉ Email: info@nanuinvestment.com</li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      &copy; 2026 Copyright NanuInvestment Pvt. Ltd. All Rights Reserved.
+    </div>
+  </footer>
+
+  <!-- Link to your external JavaScript file -->
+  <script src="{% static 'script.js' %}"></script>
+
+</body>
+</html>
