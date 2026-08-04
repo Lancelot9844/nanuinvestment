@@ -1,0 +1,50 @@
+{% extends "admin/index.html" %}
+
+{% block nav-sidebar %}
+{% include "admin/sidebar_menu.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="admin-welcome">
+  <h2>Website Management</h2>
+  <p>Use the left menu to manage website content, files, staff users, and access groups.</p>
+</div>
+<div id="content-main" class="admin-menu-grid">
+  {% if perms.myapp.view_banner %}
+    <a class="admin-menu-card" href="{% url 'admin:myapp_banner_changelist' %}">
+      <span>Banners</span>
+      <strong>Manage homepage slider images</strong>
+    </a>
+  {% endif %}
+  {% if perms.myapp.view_newsactivity %}
+    <a class="admin-menu-card" href="{% url 'admin:myapp_newsactivity_changelist' %}">
+      <span>News & Activities</span>
+      <strong>Publish latest updates</strong>
+    </a>
+  {% endif %}
+  {% if perms.myapp.view_notice %}
+    <a class="admin-menu-card" href="{% url 'admin:myapp_notice_changelist' %}">
+      <span>Notices</span>
+      <strong>Manage member notices</strong>
+    </a>
+  {% endif %}
+  {% if perms.myapp.view_download %}
+    <a class="admin-menu-card" href="{% url 'admin:myapp_download_changelist' %}">
+      <span>Downloads</span>
+      <strong>Upload required documents</strong>
+    </a>
+  {% endif %}
+  {% if perms.auth.view_user %}
+    <a class="admin-menu-card" href="{% url 'admin:auth_user_changelist' %}">
+      <span>Staff Users</span>
+      <strong>Create staff and sub-admins</strong>
+    </a>
+  {% endif %}
+  {% if perms.auth.view_group %}
+    <a class="admin-menu-card" href="{% url 'admin:auth_group_changelist' %}">
+      <span>Access Groups</span>
+      <strong>Control staff permissions</strong>
+    </a>
+  {% endif %}
+</div>
+{% endblock %}

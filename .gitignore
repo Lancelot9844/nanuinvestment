@@ -1,21 +1,48 @@
-# Virtual environment
+# Python virtual environments
+.venv/
 venv/
+env/
 
-# Python cache
+# Python cache and build output
 __pycache__/
 *.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
 
-# VS Code
-.vscode/
-
-# PyCharm
-.idea/
-
-# Environment variables
-.env
-
-# SQLite database (optional)
+# Local database
 db.sqlite3
+db.sqlite3-journal
 
-# Log files
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Uploaded media files
+media/
+
+# Node dependencies and frontend cache
+node_modules/
+frontend/node_modules/
+frontend/.vite/
+frontend/dist/
+frontend/dist-ssr/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Logs
 *.log
+logs/
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

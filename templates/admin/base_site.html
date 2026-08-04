@@ -1,0 +1,26 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
+<link rel="stylesheet" href="{% static 'admin-modern.css' %}">
+{% endblock %}
+
+{% block branding %}
+<div class="brand-wrap">
+  <img src="{% static 'admin-logo.png' %}" alt="Nanu Investment" class="admin-brand-logo">
+</div>
+{% endblock %}
+
+{% block nav-sidebar %}
+{% include "admin/sidebar_menu.html" %}
+{% endblock %}
+
+{% block footer %}
+<div class="admin-footer">
+  <span>Developed by</span>
+  <strong>ASH</strong>
+  <span>Akeluwa Software Hub Company</span>
+</div>
+{% endblock %}

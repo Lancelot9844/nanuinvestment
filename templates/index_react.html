@@ -1,0 +1,28 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nanu Investment Pvt. Ltd</title>
+  <meta name="description" content="Nanu Investment Pvt. Ltd is a saving and credit cooperative in Barahathawa-12, Sarlahi, Nepal, offering savings, fixed deposit, loan, and member support services." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://nanuinvestment.com/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Nanu Investment Pvt. Ltd" />
+  <meta property="og:description" content="Saving, deposit, loan, and cooperative financial services for members in Sarlahi, Nepal." />
+  <meta property="og:url" content="https://nanuinvestment.com/" />
+  <meta property="og:image" content="https://nanuinvestment.com/static/logo.jpeg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Nanu Investment Pvt. Ltd" />
+  <meta name="twitter:description" content="Saving, deposit, loan, and cooperative financial services for members in Sarlahi, Nepal." />
+  <meta name="twitter:image" content="https://nanuinvestment.com/static/logo.jpeg" />
+  <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}" />
+  <link rel="stylesheet" href="{% static 'react/assets/index.css' %}" />
+</head>
+<body>
+  <div id="root"></div>
+  {{ site_content|json_script:"site-content" }}
+  <script type="module" src="{% static 'react/assets/index.js' %}"></script>
+</body>
+</html>

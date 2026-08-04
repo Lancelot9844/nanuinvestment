@@ -1,77 +1,365 @@
-# Nanu Investment
+# Nanu Investment Website
 
-A simple Django website for Nanu Investment Pvt. Ltd. The project includes a homepage rendered from `templates/index.html`, a Django app named `myapp`, and a root URL configuration that routes the site home page correctly.
+This project is the website and admin system for **Nanu Investment Pvt. Ltd.** It uses Django for the backend/admin panel and React/Vite for the public website frontend.
 
-## Project Structure
+The public website is served by Django, but the main UI is built from the React app in `frontend/`. Website content such as banners, news, notices, and downloads can be managed from the Django admin panel.
 
-- `manage.py` — Django project management script
-- `nanuinvestment/` — Django project configuration
-  - `settings.py` — project settings
-  - `urls.py` — root URL routing
-- `myapp/` — application code
-  - `views.py` — homepage view
-  - `urls.py` — app route definitions
-- `templates/` — HTML and static assets used by the site
-- `requirements.txt` — Python dependencies
+## Main Features
 
-## Requirements
+- Public website homepage with responsive React UI
+- Homepage banner slider with admin-managed banner images
+- News & Activities section managed from admin
+- Notice section managed from admin
+- Downloads section managed from admin
+- Contact/footer sections on the website
+- Login icon and temporary login page route
+- SEO basics: meta tags, `robots.txt`, and `sitemap.xml`
+- Modern customized Django admin theme with light/dark mode
+- Admin favicon and logo
+- Staff/sub-admin groups for limited content access
+- Media upload support for banners, notices, downloads, and news images
 
-- Python 3.14+ (Project currently uses Python 3.14.6)
-- Django 6.0.7
+## Folder Guide
 
-## Setup
+### `manage.py`
 
-1. Clone the repository:
+Django command-line entry point. Use it for running the server, migrations, admin user creation, and checks.
 
-   ```bash
-   git clone <your-repo-url>
-   cd nanuinvestment
-   ```
-
-2. Create and activate a virtual environment:
-
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\activate
-   ```
-
-3. Install dependencies:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-## Run the project
-
-Start the Django development server:
+Examples:
 
 ```bash
 python manage.py runserver
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py check
 ```
 
-Open `http://127.0.0.1:8000/` in your browser.
+### `nanuinvestment/`
 
-## Important project notes
+Main Django project configuration.
 
-- The home page is served by `myapp.views.home`.
-- `nanuinvestment/urls.py` loads the app URLs using `path('', include('myapp.urls'))`.
-- `myapp/urls.py` defines `path('', home, name='home')`.
-- Static files and images are served by Django using the `static` template tag in `templates/index.html`.
+- `settings.py` contains installed apps, database settings, template/static/media settings, and Django configuration.
+- `urls.py` connects all routes, including `/admin/`, the website homepage, `robots.txt`, `sitemap.xml`, and media files during development.
+- `wsgi.py` and `asgi.py` are Django server entry files.
 
-## Git guidance
+### `myapp/`
 
-Push these folders and files together so the project works for others:
+Main Django app for website data and page rendering.
 
-- `manage.py`
-- `nanuinvestment/`
-- `myapp/`
-- `templates/`
-- `requirements.txt`
-- `README.md`
+- `models.py` defines the database content:
+  - `Banner`: homepage slider images
+  - `NewsActivity`: news and activities
+  - `Notice`: notices, optionally with a document
+  - `Download`: downloadable documents
+- `views.py` collects active content from the database and sends it to the React page through `site_content`.
+- `urls.py` defines website routes:
+  - `/` for the homepage
+  - `/login/` for the login placeholder page
+- `admin.py` registers website content in Django admin and adds useful controls like search, filters, active/hidden status, previews, and bulk actions.
+- `apps.py` creates default permission groups after migrations:
+  - `Content Staff`: can add/change/delete/view website content
+  - `Content Viewer`: can view website content only
+- `migrations/` stores database schema and seed migrations.
 
-Do not push local environment folders like `.venv/` or generated files such as `__pycache__/`.
+### `frontend/`
+
+React/Vite source code for the public website.
+
+- `src/App.jsx` contains the website UI and section behavior.
+- `src/App.css` contains website responsive styling.
+- `src/main.jsx` mounts the React app.
+- `index.html` is the Vite source HTML.
+- `vite.config.js` builds React output into `templates/react/` so Django can serve it.
+- `package.json` contains frontend dependencies and scripts.
+
+Important frontend commands:
+
+```bash
+cd frontend
+npm install
+npm run dev
+npm run build
+```
+
+Use `npm run dev` while designing the React app. Use `npm run build` when you want Django to serve the latest React changes.
+
+### `templates/`
+
+Django template and static asset folder.
+
+- `index_react.html` is the main Django template used for the public website. It loads the React build and passes backend content to React.
+- `login.html` is the temporary login page.
+- `admin/` contains customized Django admin templates.
+- `admin-modern.css` contains the custom admin panel theme.
+- `admin-logo.png` is used in the admin header.
+- `react/` contains built frontend files generated by Vite.
+- `style.css`, `script.js`, and `index.html` are older/static website files kept in the project.
+- `favicon.ico` is used as the site/admin favicon.
+
+### `templates/react/`
+
+Generated React build output. Django serves the public website from these files through `index_react.html`.
+
+Do not manually edit files inside this folder for normal frontend changes. Edit `frontend/src/` and run:
+
+```bash
+cd frontend
+npm run build
+```
+
+### `media/`
+
+Uploaded files from the Django admin panel.
+
+Examples:
+
+- `media/banners/`
+- `media/news/`
+- `media/notices/`
+- `media/downloads/`
+
+This folder is used during development because `MEDIA_URL` and `MEDIA_ROOT` are configured in Django.
+
+### `db.sqlite3`
+
+Local SQLite database. It stores admin users, permissions, banners, news, notices, downloads, and other Django data.
+
+### `robots.txt` and `sitemap.xml`
+
+SEO files served by Django at:
+
+- `/robots.txt`
+- `/sitemap.xml`
+
+## Admin Panel
+
+Open:
+
+```text
+http://127.0.0.1:8000/admin/
+```
+
+The admin panel has been customized with:
+
+- Nanu Investment logo
+- Custom admin dashboard layout
+- Left-side icon menu
+- Light/dark theme toggle
+- Admin footer showing `Developed by ASH Akeluwa Software Hub Company`
+- Custom styling in `templates/admin-modern.css`
+- Favicon on admin pages
+
+From admin, you can manage:
+
+- Banners
+- News & Activities
+- Notices
+- Downloads
+- Users
+- Groups
+
+## Staff and Sub-Admin Access
+
+Django already supports staff users and permissions.
+
+Recommended workflow:
+
+1. Log in as superadmin.
+2. Go to `Users`.
+3. Create a user.
+4. Enable `Staff status`.
+5. Do not enable `Superuser status` unless the user should have full control.
+6. Add the user to one of these groups:
+   - `Content Staff`
+   - `Content Viewer`
+7. Save the user.
+
+This allows staff/sub-admin users to access only selected admin features.
+
+## Content Flow
+
+1. Admin adds or edits content in Django admin.
+2. Django stores content in SQLite and uploaded files in `media/`.
+3. `myapp.views.home` loads active content:
+   - active banners
+   - active news
+   - active notices
+   - active downloads
+4. Django sends that data into `index_react.html`.
+5. React reads the data and displays it on the homepage.
+
+## Run Backend
+
+From the project root:
+
+```bash
+.venv\Scripts\activate
+python manage.py runserver 127.0.0.1:8000
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000/
+```
+
+Admin:
+
+```text
+http://127.0.0.1:8000/admin/
+```
+
+## Run Frontend During Development
+
+From the `frontend/` folder:
+
+```bash
+npm install
+npm run dev
+```
+
+The Vite dev server usually opens at:
+
+```text
+http://localhost:5173/
+```
+
+Use this for frontend design work only. Backend/admin content is served through Django.
+
+## Build Frontend for Django
+
+After changing React files:
+
+```bash
+cd frontend
+npm run build
+```
+
+This updates:
+
+- `templates/react/index.html`
+- `templates/react/assets/index.css`
+- `templates/react/assets/index.js`
+
+Django then serves the updated website through `templates/index_react.html`.
+
+## Database and Migrations
+
+Run migrations after pulling new model changes:
+
+```bash
+python manage.py migrate
+```
+
+Check project health:
+
+```bash
+python manage.py check
+```
+
+Create a superadmin:
+
+```bash
+python manage.py createsuperuser
+```
+
+## Current Models
+
+### `Banner`
+
+Used for the homepage slider.
+
+Fields:
+
+- `title`
+- `image`
+- `display_order`
+- `is_active`
+- `created_at`
+- `updated_at`
+
+### `NewsActivity`
+
+Used for News & Activities.
+
+Fields:
+
+- `title`
+- `description`
+- `image`
+- `is_active`
+- `published_at`
+- `created_at`
+- `updated_at`
+
+### `Notice`
+
+Used for notice information.
+
+Fields:
+
+- `title`
+- `description`
+- `document`
+- `is_active`
+- `published_at`
+- `created_at`
+- `updated_at`
+
+### `Download`
+
+Used for downloadable files.
+
+Fields:
+
+- `title`
+- `description`
+- `document`
+- `is_active`
+- `published_at`
+- `created_at`
+- `updated_at`
+
+## Important Files to Edit
+
+- Website design: `frontend/src/App.jsx` and `frontend/src/App.css`
+- Django page data: `myapp/views.py`
+- Website content models: `myapp/models.py`
+- Admin content settings: `myapp/admin.py`
+- Admin design: `templates/admin-modern.css`
+- Admin templates: `templates/admin/`
+- SEO template meta tags: `templates/index_react.html`
+- Routes: `myapp/urls.py` and `nanuinvestment/urls.py`
+
+## Notes
+
+- This project currently uses SQLite for local development.
+- Uploaded media files are served only in development through Django when `DEBUG = True`.
+- For production, configure a proper static/media file hosting setup and set secure Django settings.
+- Avoid manually changing Vite build output in `templates/react/`; change the React source files and rebuild.
 
 ## Troubleshooting
 
-- If the homepage does not appear, verify `myapp/urls.py` and `nanuinvestment/urls.py` are configured correctly.
-- If static assets do not load, verify `STATIC_URL` and `STATICFILES_DIRS` in `settings.py`, and confirm the template uses `{% load static %}`.
+If website changes do not appear:
+
+1. If you edited React files, run `npm run build` inside `frontend/`.
+2. Restart the Django server.
+3. Hard refresh the browser with `Ctrl + F5`.
+
+If admin CSS changes do not appear:
+
+1. Hard refresh with `Ctrl + F5`.
+2. Restart Django if needed.
+3. Confirm the file changed: `templates/admin-modern.css`.
+
+If uploaded files do not show:
+
+1. Confirm `MEDIA_URL = '/media/'`.
+2. Confirm `MEDIA_ROOT = BASE_DIR / 'media'`.
+3. Confirm `nanuinvestment/urls.py` serves media during `DEBUG`.
+
+If admin access is blocked:
+
+1. Confirm the user has `Staff status`.
+2. Confirm the user is active.
+3. Confirm permissions or group membership are assigned.

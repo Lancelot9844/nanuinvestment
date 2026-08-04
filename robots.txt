@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api-auth/
+
+Sitemap: https://nanuinvestment.com/sitemap.xml

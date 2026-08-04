@@ -16,8 +16,36 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.http import HttpResponse
+from django.views.decorators.http import condition
+from django.conf import settings
+from django.conf.urls.static import static
+import os
+
+def get_sitemap():
+    sitemap_path = os.path.join(os.path.dirname(__file__), '..', 'sitemap.xml')
+    with open(sitemap_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+def get_robots():
+    robots_path = os.path.join(os.path.dirname(__file__), '..', 'robots.txt')
+    with open(robots_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+def sitemap(request):
+    return HttpResponse(get_sitemap(), content_type='application/xml')
+
+def robots(request):
+    return HttpResponse(get_robots(), content_type='text/plain')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('myapp.urls')),
+    
+    # SEO
+    path('sitemap.xml', sitemap, name='sitemap'),
+    path('robots.txt', robots, name='robots'),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
