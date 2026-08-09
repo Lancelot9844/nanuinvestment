@@ -1,7 +1,88 @@
-from django.db import models
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
+from django.db import models, transaction
+from django.utils import timezone
 
 
-class TimestampedContent(models.Model):
+class SoftDeleteQuerySet(models.QuerySet):
+    def delete(self):
+        deleted_count = 0
+        deleted_by_model = {}
+        for obj in self:
+            count, details = obj.delete()
+            deleted_count += count
+            for model_label, model_count in details.items():
+                deleted_by_model[model_label] = deleted_by_model.get(model_label, 0) + model_count
+        return deleted_count, deleted_by_model
+
+    def hard_delete(self):
+        return super().delete()
+
+
+class SoftDeleteManager(models.Manager.from_queryset(SoftDeleteQuerySet)):
+    def get_queryset(self):
+        return super().get_queryset().filter(is_deleted=False)
+
+
+class SoftDeleteModel(models.Model):
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    objects = SoftDeleteManager()
+    all_objects = models.Manager()
+
+    class Meta:
+        abstract = True
+
+    def delete(self, using=None, keep_parents=False, deleted_by=None):
+        if not self.pk or self.is_deleted:
+            return 0, {}
+
+        database = using or self._state.db
+        with transaction.atomic(using=database):
+            self.is_deleted = True
+            self.deleted_at = timezone.now()
+            self.save(using=database, update_fields=("is_deleted", "deleted_at"))
+            content_type = ContentType.objects.db_manager(database).get_for_model(self)
+            RecycleBinItem.objects.using(database).update_or_create(
+                content_type=content_type,
+                object_id=self.pk,
+                defaults={
+                    "object_label": str(self)[:250],
+                    "deleted_by": deleted_by if getattr(deleted_by, "pk", None) else None,
+                },
+            )
+
+        return 1, {self._meta.label: 1}
+
+    def restore(self, using=None):
+        if not self.pk:
+            return False
+
+        database = using or self._state.db
+        with transaction.atomic(using=database):
+            self.is_deleted = False
+            self.deleted_at = None
+            self.save(using=database, update_fields=("is_deleted", "deleted_at"))
+            content_type = ContentType.objects.db_manager(database).get_for_model(self)
+            RecycleBinItem.objects.using(database).filter(
+                content_type=content_type,
+                object_id=self.pk,
+            ).delete()
+        return True
+
+    def hard_delete(self, using=None, keep_parents=False):
+        database = using or self._state.db
+        content_type = ContentType.objects.db_manager(database).get_for_model(self)
+        RecycleBinItem.objects.using(database).filter(
+            content_type=content_type,
+            object_id=self.pk,
+        ).delete()
+        return super().delete(using=database, keep_parents=keep_parents)
+
+
+class TimestampedContent(SoftDeleteModel):
     title = models.CharField(max_length=180)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
@@ -25,7 +106,7 @@ class NewsActivity(TimestampedContent):
         verbose_name_plural = "News & Activities"
 
 
-class Banner(models.Model):
+class Banner(SoftDeleteModel):
     title = models.CharField(max_length=180)
     image = models.FileField(upload_to="banners/")
     display_order = models.PositiveIntegerField(default=0)
@@ -56,3 +137,416 @@ class Download(TimestampedContent):
     class Meta(TimestampedContent.Meta):
         verbose_name = "Download"
         verbose_name_plural = "Downloads"
+
+
+class WebsitePopup(SoftDeleteModel):
+    title = models.CharField(max_length=180)
+    message = models.TextField(blank=True, default="")
+    image = models.FileField(upload_to="popups/", blank=True)
+    button_text = models.CharField(max_length=80, blank=True)
+    button_url = models.CharField(max_length=240, blank=True)
+    is_active = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_order", "-created_at"]
+        verbose_name = "Website Popup"
+        verbose_name_plural = "Website Popups"
+
+    def __str__(self):
+        return self.title
+
+
+class AdminProfile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="admin_profile",
+    )
+    phone_number = models.CharField(max_length=30, blank=True)
+    address = models.TextField(blank=True)
+    photo = models.FileField(upload_to="admin_profiles/", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Admin Profile"
+        verbose_name_plural = "Admin Profiles"
+
+    def __str__(self):
+        return f"{self.user.get_username()} profile"
+
+
+class Customer(SoftDeleteModel):
+    class AccountType(models.TextChoices):
+        SAVINGS = "savings", "Savings Account"
+        CURRENT = "current", "Current Account"
+        FIXED = "fixed", "Fixed Deposit"
+        RECURRING = "recurring", "Recurring Deposit"
+
+    class KycStatus(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PENDING = "pending", "Sent for Approval"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    customer_id = models.CharField(max_length=20, unique=True, blank=True)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="customer_profile",
+        help_text="Normal user account this customer uses for the customer portal.",
+    )
+    first_name = models.CharField(max_length=80)
+    last_name = models.CharField(max_length=80)
+    phone_number = models.CharField(max_length=30)
+    email = models.EmailField(blank=True)
+    profile_photo = models.FileField(upload_to="customer_profiles/", blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    citizenship_number = models.CharField(max_length=80, blank=True)
+    address = models.TextField()
+    account_type = models.CharField(
+        max_length=20,
+        choices=AccountType.choices,
+        default=AccountType.SAVINGS,
+    )
+    opening_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    nominee_name = models.CharField(max_length=160, blank=True)
+    nominee_phone = models.CharField(max_length=30, blank=True)
+    kyc_document_name = models.CharField(max_length=160, blank=True)
+    kyc_document = models.FileField(upload_to="customer_kyc/", blank=True)
+    kyc_status = models.CharField(
+        max_length=20,
+        choices=KycStatus.choices,
+        default=KycStatus.DRAFT,
+    )
+    submitted_for_approval_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_customers",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Customer & KYC"
+        verbose_name_plural = "Customers & KYC"
+
+    def save(self, *args, **kwargs):
+        if not self.customer_id:
+            last_customer = Customer.all_objects.order_by("-id").first()
+            next_id = (last_customer.id + 1) if last_customer else 1
+            self.customer_id = f"CUST-{next_id:06d}"
+        super().save(*args, **kwargs)
+
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}".strip()
+
+    def __str__(self):
+        return f"{self.customer_id} - {self.full_name}"
+
+
+class CustomerKYCDocument(SoftDeleteModel):
+    class DocumentType(models.TextChoices):
+        CITIZENSHIP_FRONT = "citizenship_front", "Citizenship Front"
+        CITIZENSHIP_BACK = "citizenship_back", "Citizenship Back"
+        PASSPORT_PHOTO = "passport_photo", "Passport Size Photo"
+        SIGNATURE = "signature", "Signature"
+        ADDRESS_PROOF = "address_proof", "Address Proof"
+        OTHER = "other", "Other"
+
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="kyc_documents")
+    document_type = models.CharField(max_length=40, choices=DocumentType.choices)
+    document_name = models.CharField(max_length=160, help_text="Label shown for this uploaded document.")
+    document = models.FileField(upload_to="customer_kyc/")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["document_type", "document_name"]
+        verbose_name = "KYC Document"
+        verbose_name_plural = "KYC Documents"
+
+    def __str__(self):
+        return f"{self.customer.full_name} - {self.document_name}"
+
+
+class EBankingCredential(models.Model):
+    customer = models.OneToOneField(Customer, on_delete=models.CASCADE, related_name="ebanking_credential")
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="ebanking_credential",
+    )
+    username = models.CharField(max_length=150, unique=True)
+    temporary_password = models.CharField(
+        max_length=128,
+        blank=True,
+        help_text="Shown for admin handover. Cleared when the customer changes their password.",
+    )
+    password_changed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["customer__customer_id"]
+        verbose_name = "E-Banking"
+        verbose_name_plural = "E-Banking"
+
+    def __str__(self):
+        return f"{self.customer.customer_id} - {self.username}"
+
+
+class DailyCollection(Customer):
+    class Meta:
+        proxy = True
+        verbose_name = "Daily Collection"
+        verbose_name_plural = "Daily Collections"
+
+
+class CollectionRecord(SoftDeleteModel):
+    class VisitType(models.TextChoices):
+        SHOP = "shop", "Shop Visit"
+        HOME = "home", "Home Visit"
+        OFFICE = "office", "Office Collection"
+
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="collections")
+    collected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="collection_records",
+    )
+    visit_type = models.CharField(max_length=20, choices=VisitType.choices, default=VisitType.SHOP)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    collected_at = models.DateTimeField()
+    note = models.CharField(max_length=220, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-collected_at"]
+        verbose_name = "Collection Record"
+        verbose_name_plural = "Collection Records"
+
+    def __str__(self):
+        return f"{self.customer.full_name} - {self.amount}"
+
+
+class Transaction(SoftDeleteModel):
+    class TransactionType(models.TextChoices):
+        COLLECTION = "collection", "Collection"
+
+    class Status(models.TextChoices):
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    transaction_id = models.CharField(max_length=24, unique=True, blank=True)
+    collection_record = models.OneToOneField(
+        CollectionRecord,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transaction",
+    )
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="transactions")
+    transaction_type = models.CharField(
+        max_length=20,
+        choices=TransactionType.choices,
+        default=TransactionType.COLLECTION,
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.COMPLETED)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    balance_after = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_method = models.CharField(max_length=40, default="Cash")
+    visit_type = models.CharField(max_length=20, choices=CollectionRecord.VisitType.choices)
+    collected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transactions_collected",
+    )
+    note = models.CharField(max_length=220, blank=True)
+    transacted_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-transacted_at", "-id"]
+        verbose_name = "Transaction"
+        verbose_name_plural = "Transactions"
+
+    def save(self, *args, **kwargs):
+        if not self.transaction_id:
+            last_transaction = Transaction.all_objects.order_by("-id").first()
+            next_id = (last_transaction.id + 1) if last_transaction else 1
+            self.transaction_id = f"TXN-{next_id:08d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.transaction_id} - {self.customer.full_name}"
+
+
+class Ticket(SoftDeleteModel):
+    class Priority(models.TextChoices):
+        LOW = "low", "Low"
+        NORMAL = "normal", "Normal"
+        HIGH = "high", "High"
+        URGENT = "urgent", "Urgent"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        ASSIGNED = "assigned", "Assigned to Staff"
+        STAFF_COMPLETED = "staff_completed", "Staff Marked Complete"
+        VERIFIED_COMPLETED = "verified_completed", "Completed"
+        NOT_COMPLETED = "not_completed", "Not Completed"
+
+    title = models.CharField(max_length=180)
+    description = models.TextField()
+    priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.NORMAL)
+    status = models.CharField(max_length=30, choices=Status.choices, default=Status.OPEN)
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tickets",
+        help_text="Customer this support ticket belongs to, when created from the customer portal.",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_tickets",
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_tickets",
+        help_text="Invite/assign a staff member to solve this ticket.",
+    )
+    staff_completion_note = models.TextField(
+        blank=True,
+        help_text="Staff adds the work note before marking this ticket complete.",
+    )
+    staff_completed_at = models.DateTimeField(null=True, blank=True)
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="verified_tickets",
+    )
+    admin_verification_reason = models.TextField(
+        blank=True,
+        help_text="Admin adds the reason before verifying completed or returning as not completed.",
+    )
+    verified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Ticket Created"
+        verbose_name_plural = "Ticket Created"
+
+    def __str__(self):
+        return self.title
+
+
+class RecycleBinItem(models.Model):
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveBigIntegerField()
+    object_label = models.CharField(max_length=250)
+    deleted_at = models.DateTimeField(auto_now_add=True)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recycled_items",
+    )
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ("-deleted_at",)
+        constraints = (
+            models.UniqueConstraint(
+                fields=("content_type", "object_id"),
+                name="unique_recycled_object",
+            ),
+        )
+        verbose_name = "Recycle Bin Item"
+        verbose_name_plural = "Recycle Bin"
+
+    @classmethod
+    def recycle(cls, obj, deleted_by=None):
+        if isinstance(obj, SoftDeleteModel):
+            return obj.delete(deleted_by=deleted_by)
+
+        if isinstance(obj, get_user_model()):
+            with transaction.atomic():
+                content_type = ContentType.objects.get_for_model(obj)
+                cls.objects.update_or_create(
+                    content_type=content_type,
+                    object_id=obj.pk,
+                    defaults={
+                        "object_label": str(obj)[:250],
+                        "deleted_by": deleted_by if getattr(deleted_by, "pk", None) else None,
+                        "metadata": {"was_active": obj.is_active},
+                    },
+                )
+                obj.is_active = False
+                obj.save(update_fields=("is_active",))
+            return 1, {obj._meta.label: 1}
+
+        raise TypeError(f"{obj._meta.label} does not support the Recycle Bin.")
+
+    def get_recycled_object(self):
+        model = self.content_type.model_class()
+        if model is None:
+            return None
+        manager = getattr(model, "all_objects", model._base_manager)
+        return manager.filter(pk=self.object_id).first()
+
+    def restore_object(self):
+        obj = self.get_recycled_object()
+        if obj is None:
+            return False
+
+        if isinstance(obj, SoftDeleteModel):
+            return obj.restore()
+
+        if isinstance(obj, get_user_model()):
+            obj.is_active = self.metadata.get("was_active", True)
+            obj.save(update_fields=("is_active",))
+            type(self).objects.filter(pk=self.pk).delete()
+            return True
+
+        return False
+
+    def permanently_delete_object(self):
+        item_pk = self.pk
+        obj = self.get_recycled_object()
+        if obj is not None:
+            if isinstance(obj, SoftDeleteModel):
+                obj.hard_delete()
+            else:
+                obj.delete()
+        type(self).objects.filter(pk=item_pk).delete()
+        return obj is not None
+
+    def __str__(self):
+        return self.object_label

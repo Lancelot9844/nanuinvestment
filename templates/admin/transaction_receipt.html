@@ -1,0 +1,88 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+  <div class="breadcrumbs print-hidden">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:myapp_transaction_changelist' %}">Transactions</a>
+    &rsaquo; {{ transaction.transaction_id }}
+  </div>
+{% endblock %}
+
+{% block content %}
+<div class="transaction-receipt-page">
+  <div class="transaction-toolbar print-hidden">
+    <a class="button" href="{% url 'admin:myapp_transaction_changelist' %}">Back to Transactions</a>
+    <a class="button" href="{% url 'admin:myapp_transaction_download_pdf' transaction.pk %}">Download PDF</a>
+    <a class="button" href="{% url 'admin:myapp_transaction_download_jpg' transaction.pk %}">Download JPG</a>
+    <button class="button" type="button" onclick="window.print()">Print Bill</button>
+  </div>
+
+  <section class="transaction-receipt">
+    <header class="receipt-header">
+      <div>
+        <h1>Nanu Investment</h1>
+        <p>Collection Transaction Bill</p>
+      </div>
+      <div class="receipt-number">
+        <span>Receipt No.</span>
+        <strong>{{ transaction.transaction_id }}</strong>
+      </div>
+    </header>
+
+    <div class="receipt-meta">
+      <div><span>Date</span><strong>{{ transaction.transacted_at|date:"d M Y, H:i" }}</strong></div>
+      <div><span>Status</span><strong>{{ transaction.get_status_display }}</strong></div>
+      <div><span>Payment Method</span><strong>{{ transaction.payment_method }}</strong></div>
+      <div><span>Collection Location</span><strong>{{ transaction.get_visit_type_display }}</strong></div>
+    </div>
+
+    <div class="receipt-section-grid">
+      <section>
+        <h2>Customer Details</h2>
+        <dl>
+          <dt>Name</dt><dd>{{ transaction.customer.full_name }}</dd>
+          <dt>Account Number</dt><dd>{{ transaction.customer.customer_id }}</dd>
+          <dt>Phone</dt><dd>{{ transaction.customer.phone_number }}</dd>
+          <dt>Account Type</dt><dd>{{ transaction.customer.get_account_type_display }}</dd>
+        </dl>
+      </section>
+      <section>
+        <h2>Collection Details</h2>
+        <dl>
+          <dt>Collected By</dt><dd>{{ transaction.collected_by|default:"-" }}</dd>
+          <dt>Transaction Type</dt><dd>{{ transaction.get_transaction_type_display }}</dd>
+          <dt>Remarks</dt><dd>{{ transaction.note|default:"-" }}</dd>
+        </dl>
+      </section>
+    </div>
+
+    <table class="receipt-amount-table">
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th>Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Collected amount</td>
+          <td>Rs {{ transaction.amount|floatformat:2 }}</td>
+        </tr>
+        <tr>
+          <td>Total balance after this transaction</td>
+          <td>Rs {{ transaction.balance_after|floatformat:2 }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <footer class="receipt-footer">
+      <div>
+        <span>Customer Signature</span>
+      </div>
+      <div>
+        <span>Authorized Signature</span>
+      </div>
+    </footer>
+  </section>
+</div>
+{% endblock %}

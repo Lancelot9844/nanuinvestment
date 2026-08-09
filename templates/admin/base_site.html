@@ -7,9 +7,62 @@
 <link rel="stylesheet" href="{% static 'admin-modern.css' %}">
 {% endblock %}
 
+{% block extrahead %}
+{{ block.super }}
+<script src="{% static 'admin/js/sidebar-state.js' %}" defer></script>
+{% endblock %}
+
 {% block branding %}
 <div class="brand-wrap">
-  <img src="{% static 'admin-logo.png' %}" alt="Nanu Investment" class="admin-brand-logo">
+  {% if perms.auth.view_user %}
+    <form class="admin-top-search" action="{% url 'admin:auth_user_changelist' %}" method="get">
+      <input type="search" name="q" placeholder="Search users..." aria-label="Search users">
+    </form>
+  {% else %}
+    <div class="admin-top-search admin-top-search-static">NanuInvestment Admin</div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block welcome-msg %}
+{% endblock %}
+
+{% block userlinks %}
+<div class="admin-header-links">
+  <button class="theme-toggle admin-theme-toggle" type="button" aria-label="Toggle dark or light mode">
+    <span class="theme-light-label">Light</span>
+    <span class="theme-dark-label">Dark</span>
+  </button>
+
+  <details class="admin-profile-menu">
+    <summary>
+      <span class="admin-profile-photo">
+        {% if request.user.admin_profile.photo %}
+          <img src="{{ request.user.admin_profile.photo.url }}" alt="">
+        {% else %}
+          {{ request.user.username|default:"A"|first|upper }}
+        {% endif %}
+      </span>
+      <span class="admin-profile-text">
+        <strong>{{ request.user.get_full_name|default:request.user.username|default:"Admin" }}</strong>
+        <span>{% if request.user.is_superuser %}Super Admin{% elif request.user.is_staff %}Staff{% else %}User{% endif %}</span>
+      </span>
+    </summary>
+    <div class="admin-profile-dropdown">
+      {% url 'admin:myapp_staff_profile_settings' as profile_url %}
+      <a href="{{ profile_url }}">Profile Settings</a>
+      {% if site_url %}
+        <a href="{{ site_url }}">Visit Website</a>
+      {% endif %}
+      {% if user.has_usable_password %}
+        <a href="{% url 'admin:password_change' %}">Change Password</a>
+      {% endif %}
+      <form id="logout-form" method="post" action="{% url 'admin:logout' %}">
+        {% csrf_token %}
+        <button type="submit">Log Out</button>
+      </form>
+    </div>
+  </details>
 </div>
 {% endblock %}
 
@@ -20,7 +73,6 @@
 {% block footer %}
 <div class="admin-footer">
   <span>Developed by</span>
-  <strong>ASH</strong>
-  <span>Akeluwa Software Hub Company</span>
+  <span><b>Akeluwa Software Hub Company</b></span>
 </div>
 {% endblock %}

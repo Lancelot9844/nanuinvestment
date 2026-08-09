@@ -15,6 +15,8 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
+from django.contrib.auth import logout
+from django.shortcuts import redirect
 from django.urls import path, include
 from django.http import HttpResponse
 from django.views.decorators.http import condition
@@ -38,7 +40,12 @@ def sitemap(request):
 def robots(request):
     return HttpResponse(get_robots(), content_type='text/plain')
 
+def admin_logout_redirect(request):
+    logout(request)
+    return redirect('admin:login')
+
 urlpatterns = [
+    path('admin/logout/', admin_logout_redirect, name='admin_logout_redirect'),
     path('admin/', admin.site.urls),
     path('', include('myapp.urls')),
     

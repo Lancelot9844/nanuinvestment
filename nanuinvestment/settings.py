@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-t!pfji*8+-@$c2tbjyb(ml3p+bd)=$doun+cv^egu@mhw3owr=
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -122,3 +122,6 @@ STATICFILES_DIRS = [
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Allow the site to embed its own uploaded PDFs inside the homepage popup.
+X_FRAME_OPTIONS = 'SAMEORIGIN'

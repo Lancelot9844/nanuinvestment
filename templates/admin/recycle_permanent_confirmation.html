@@ -1,0 +1,29 @@
+{% extends "admin/base_site.html" %}
+{% load admin_urls %}
+
+{% block content %}
+  <div class="module">
+    <h2>Permanent deletion cannot be undone</h2>
+    <p>The following records and their dependent information will be removed from the database:</p>
+    <ul>
+      {% for item in queryset %}
+        <li>{{ item.object_label }} ({{ item.content_type.name }})</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    {% for item in queryset %}
+      <input type="hidden" name="{{ action_checkbox_name }}" value="{{ item.pk }}">
+    {% endfor %}
+    <input type="hidden" name="action" value="permanently_delete_selected">
+    <input type="hidden" name="confirm_permanent" value="yes">
+    <input type="hidden" name="select_across" value="0">
+    <div class="submit-row">
+      <input type="submit" class="deletelink" value="Yes, permanently delete">
+      {% url opts|admin_urlname:'changelist' as recycle_url %}
+      <a class="button cancel-link" href="{{ recycle_url }}">Cancel</a>
+    </div>
+  </form>
+{% endblock %}

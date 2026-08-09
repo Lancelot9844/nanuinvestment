@@ -1,0 +1,30 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div class="staff-profile-page">
+  <div class="staff-profile-panel">
+    <div class="staff-profile-heading">
+      <span class="staff-profile-avatar">
+        {% if profile.photo %}
+          <img src="{{ profile.photo.url }}" alt="">
+        {% else %}
+          {{ request.user.username|default:"A"|first|upper }}
+        {% endif %}
+      </span>
+      <div>
+        <h1>Profile Settings</h1>
+        <p>{{ request.user.get_full_name|default:request.user.username }}</p>
+      </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="staff-profile-form">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="staff-profile-actions">
+        <button type="submit">Update Profile</button>
+        <a href="{% url 'admin:index' %}">Back to dashboard</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

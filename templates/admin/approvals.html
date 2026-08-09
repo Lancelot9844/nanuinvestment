@@ -1,0 +1,93 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Home</a> &rsaquo; Approvals</div>
+{% endblock %}
+
+{% block content %}
+<div class="approvals-page">
+  <section class="accounting-hero">
+    <div>
+      <h1>Approvals</h1>
+      <p>Review requests waiting for admin decision.</p>
+    </div>
+    <div class="approvals-count">{{ approval_count }} pending</div>
+  </section>
+
+  <section class="approvals-grid">
+    <article class="approvals-panel">
+      <div class="approvals-panel-head">
+        <div>
+          <h2>KYC Approval Requests</h2>
+          <p>Customers sent for approval from Customers &amp; KYC.</p>
+        </div>
+      </div>
+      <div class="approvals-list">
+        {% for customer in pending_kyc %}
+          <div class="approval-item">
+            <div>
+              <strong>{{ customer.full_name }}</strong>
+              <span>{{ customer.customer_id }} · {{ customer.phone_number }} · {{ customer.get_account_type_display }}</span>
+              <small>Submitted {{ customer.submitted_for_approval_at|date:"d M Y, H:i"|default:"-" }}</small>
+            </div>
+            <div class="approval-actions">
+              <a class="approval-secondary" href="{% url 'admin:myapp_customer_change' customer.pk %}">Review</a>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="approve_kyc">
+                <input type="hidden" name="object_id" value="{{ customer.pk }}">
+                <button type="submit">Approve</button>
+              </form>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reject_kyc">
+                <input type="hidden" name="object_id" value="{{ customer.pk }}">
+                <button class="approval-danger" type="submit">Reject</button>
+              </form>
+            </div>
+          </div>
+        {% empty %}
+          <p class="approval-empty">No KYC requests waiting for approval.</p>
+        {% endfor %}
+      </div>
+    </article>
+
+    <article class="approvals-panel">
+      <div class="approvals-panel-head">
+        <div>
+          <h2>Ticket Completion Requests</h2>
+          <p>Tickets marked complete by staff and waiting for admin verification.</p>
+        </div>
+      </div>
+      <div class="approvals-list">
+        {% for ticket in pending_tickets %}
+          <div class="approval-item">
+            <div>
+              <strong>{{ ticket.title }}</strong>
+              <span>{{ ticket.customer|default:"No customer" }} · Assigned to {{ ticket.assigned_to|default:"-" }}</span>
+              <small>Completed {{ ticket.staff_completed_at|date:"d M Y, H:i"|default:"-" }}</small>
+            </div>
+            <div class="approval-actions">
+              <a class="approval-secondary" href="{% url 'admin:myapp_ticket_change' ticket.pk %}">Review</a>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="verify_ticket">
+                <input type="hidden" name="object_id" value="{{ ticket.pk }}">
+                <button type="submit">Verify</button>
+              </form>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="return_ticket">
+                <input type="hidden" name="object_id" value="{{ ticket.pk }}">
+                <button class="approval-danger" type="submit">Return</button>
+              </form>
+            </div>
+          </div>
+        {% empty %}
+          <p class="approval-empty">No ticket completion requests waiting for verification.</p>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+</div>
+{% endblock %}

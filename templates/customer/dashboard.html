@@ -1,0 +1,115 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Dashboard | Nanu Investment</title>
+  <link rel="stylesheet" href="{% static 'admin-modern.css' %}">
+</head>
+<body class="customer-portal">
+  <main class="customer-dashboard">
+    <header class="customer-dashboard-header">
+      <div class="customer-dashboard-identity">
+        <img src="{% static 'logo.jpeg' %}" alt="Nanu Investment logo">
+        <div class="customer-profile-row">
+          <span class="customer-profile-photo">
+            {% if customer.profile_photo %}
+              <img src="{{ customer.profile_photo.url }}" alt="">
+            {% else %}
+              {{ customer.full_name|default:customer.customer_id|first|upper }}
+            {% endif %}
+          </span>
+          <span>
+            <h1>{{ customer.full_name }}</h1>
+            <p>{{ customer.customer_id }}</p>
+          </span>
+        </div>
+      </div>
+      <nav class="customer-header-actions">
+        <a href="{% url 'customer_profile_settings' %}">Profile Settings</a>
+        <a href="{% url 'customer_change_password' %}">Change Password</a>
+        <a href="{% url 'customer_logout' %}">Log Out</a>
+      </nav>
+    </header>
+
+    <section class="customer-summary-grid">
+      <article>
+        <span>Account Type</span>
+        <strong>{{ customer.get_account_type_display }}</strong>
+      </article>
+      <article>
+        <span>KYC Status</span>
+        <strong>{{ customer.get_kyc_status_display }}</strong>
+      </article>
+      <article>
+        <span>Current Amount</span>
+        <strong>Rs {{ account_total }}</strong>
+      </article>
+    </section>
+
+    <section class="customer-panel">
+      <div class="customer-panel-header">
+        <h2>Support Tickets</h2>
+        <a href="{% url 'customer_create_ticket' %}">Create Ticket</a>
+      </div>
+      {% if tickets %}
+        <div class="customer-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Assigned</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ticket in tickets %}
+                <tr>
+                  <td>{{ ticket.title }}</td>
+                  <td>{{ ticket.get_priority_display }}</td>
+                  <td>{{ ticket.get_status_display }}</td>
+                  <td>{{ ticket.assigned_to|default:"Pending" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="customer-empty">No tickets created yet.</p>
+      {% endif %}
+    </section>
+
+    <section class="customer-panel">
+      <h2>Recent Collections</h2>
+      {% if collections %}
+        <div class="customer-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Location</th>
+                <th>Collected By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for collection in collections %}
+                <tr>
+                  <td>{{ collection.collected_at|date:"d M Y" }}</td>
+                  <td>Rs {{ collection.amount }}</td>
+                  <td>{{ collection.get_visit_type_display }}</td>
+                  <td>{{ collection.collected_by|default:"-" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="customer-empty">No collection records yet.</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

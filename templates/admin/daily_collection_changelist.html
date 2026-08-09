@@ -1,0 +1,12 @@
+{% extends "admin/change_list.html" %}
+
+{% block result_list %}
+  {% if cl.query and cl.result_count == 0 %}
+    <div class="collection-empty-state" role="status">
+      <strong>Customer does not exist</strong>
+      <span>No customer matched "{{ cl.query }}".</span>
+    </div>
+  {% else %}
+    {{ block.super }}
+  {% endif %}
+{% endblock %}

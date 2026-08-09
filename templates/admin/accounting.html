@@ -1,0 +1,90 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Home</a> &rsaquo; Accounting</div>
+{% endblock %}
+
+{% block content %}
+<div class="accounting-page">
+  <section class="accounting-hero">
+    <div>
+      <h1>Accounting</h1>
+      <p>Post vouchers and review financial statements.</p>
+    </div>
+    <a class="accounting-primary-action" href="{% url 'admin:myapp_collectionrecord_add' %}">+ Add New</a>
+  </section>
+
+  <section class="accounting-metrics" aria-label="Accounting summary">
+    <article>
+      <div class="accounting-metric-top"><span>Income This Month</span><i>#</i></div>
+      <strong>Rs {{ income_this_month|floatformat:2 }}</strong>
+      <small>Live transaction value</small>
+    </article>
+    <article>
+      <div class="accounting-metric-top"><span>Expenses</span><i>Rs</i></div>
+      <strong>Rs {{ expenses_this_month|floatformat:2 }}</strong>
+      <small>Ready for expense vouchers</small>
+    </article>
+    <article>
+      <div class="accounting-metric-top"><span>Net Surplus</span><i>✓</i></div>
+      <strong>Rs {{ net_surplus|floatformat:2 }}</strong>
+      <small>Income minus expenses</small>
+    </article>
+    <article>
+      <div class="accounting-metric-top"><span>Unposted Vouchers</span><i>!</i></div>
+      <strong>{{ unposted_vouchers }}</strong>
+      <small>Pending accounting entries</small>
+    </article>
+  </section>
+
+  <section class="accounting-panel">
+    <div class="accounting-panel-head">
+      <div>
+        <h2>Accounting Overview</h2>
+        <p>Transaction vouchers generated from customer collections</p>
+      </div>
+      <form method="get" class="accounting-filters">
+        <input type="search" name="q" value="{{ search_query }}" placeholder="Search records" aria-label="Search records">
+        <select name="status" aria-label="Filter by status">
+          <option value="">All status</option>
+          {% for value, label in status_choices %}
+            <option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit">Filter</button>
+      </form>
+    </div>
+
+    <div class="accounting-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Voucher</th>
+            <th>Date</th>
+            <th>Particular</th>
+            <th>Debit</th>
+            <th>Credit</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in voucher_rows %}
+            <tr>
+              <td><a href="{% url 'admin:myapp_transaction_receipt' row.pk %}">{{ row.transaction_id }}</a></td>
+              <td>{{ row.transacted_at|date:"M d" }}</td>
+              <td>Collection from {{ row.customer.full_name }}</td>
+              <td>—</td>
+              <td>Rs {{ row.amount|floatformat:2 }}</td>
+              <td><span class="accounting-status accounting-status-{{ row.status }}">{{ row.get_status_display }}</span></td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="accounting-empty">No accounting vouchers found.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

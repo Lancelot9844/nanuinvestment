@@ -56,6 +56,17 @@ const fallbackContent = {
       published_at: 'Download',
     },
   ],
+  popup: null,
+}
+
+function normalizeSiteContent(content) {
+  return {
+    banners: content.banners?.length ? content.banners : fallbackContent.banners,
+    news: content.news?.length ? content.news : fallbackContent.news,
+    notices: content.notices?.length ? content.notices : fallbackContent.notices,
+    downloads: content.downloads?.length ? content.downloads : fallbackContent.downloads,
+    popup: content.popup || null,
+  }
 }
 
 function readSiteContent() {
@@ -65,13 +76,7 @@ function readSiteContent() {
   }
 
   try {
-    const parsed = JSON.parse(node.textContent)
-    return {
-      banners: parsed.banners?.length ? parsed.banners : fallbackContent.banners,
-      news: parsed.news?.length ? parsed.news : fallbackContent.news,
-      notices: parsed.notices?.length ? parsed.notices : fallbackContent.notices,
-      downloads: parsed.downloads?.length ? parsed.downloads : fallbackContent.downloads,
-    }
+    return normalizeSiteContent(JSON.parse(node.textContent))
   } catch {
     return fallbackContent
   }
@@ -93,10 +98,88 @@ function ContentCard({ item, actionLabel }) {
   )
 }
 
+function PopupMedia({ popup }) {
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState('')
+  const [pdfPreviewFailed, setPdfPreviewFailed] = useState(false)
+
+  useEffect(() => {
+    if (popup.file_type !== 'pdf' || !popup.pdf_url) {
+      return undefined
+    }
+
+    let ignore = false
+    let objectUrl = ''
+
+    async function loadPdfPreview() {
+      try {
+        const response = await fetch(popup.pdf_url)
+        if (!response.ok) {
+          throw new Error('PDF preview failed')
+        }
+
+        const blob = await response.blob()
+        objectUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }))
+        if (!ignore) {
+          setPdfPreviewUrl(objectUrl)
+          setPdfPreviewFailed(false)
+        }
+      } catch {
+        if (!ignore) {
+          setPdfPreviewFailed(true)
+        }
+      }
+    }
+
+    loadPdfPreview()
+
+    return () => {
+      ignore = true
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl)
+      }
+    }
+  }, [popup.file_type, popup.pdf_url])
+
+  if (popup.file_type === 'image' && popup.image_url) {
+    return <img src={popup.image_url} alt={popup.title} className="website-popup-media website-popup-image" />
+  }
+
+  if (popup.file_type === 'pdf' && popup.pdf_url) {
+    return (
+      <div className="website-popup-media website-popup-pdf">
+        {pdfPreviewUrl && !pdfPreviewFailed ? (
+          <iframe src={pdfPreviewUrl} title={popup.title} />
+        ) : (
+          <div className="website-popup-pdf-fallback">
+            <strong>{popup.file_name || 'PDF notice'}</strong>
+            <a href={popup.pdf_url} target="_blank" rel="noreferrer">
+              Open PDF
+            </a>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (popup.document_url) {
+    return (
+      <div className="website-popup-media website-popup-document">
+        <strong>{popup.file_name || 'Uploaded file'}</strong>
+        <a href={popup.document_url} target="_blank" rel="noreferrer">
+          Open uploaded file
+        </a>
+      </div>
+    )
+  }
+
+  return null
+}
+
 function App() {
   const [activeSlide, setActiveSlide] = useState(0)
-  const [siteContent] = useState(readSiteContent)
+  const [siteContent, setSiteContent] = useState(readSiteContent)
   const slides = siteContent.banners
+  const [showPopup, setShowPopup] = useState(Boolean(siteContent.popup))
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [dragStartX, setDragStartX] = useState(null)
   const [formData, setFormData] = useState({
@@ -106,6 +189,33 @@ function App() {
     message: '',
   })
   const [formStatus, setFormStatus] = useState('')
+
+  useEffect(() => {
+    let ignore = false
+
+    async function loadSiteContent() {
+      try {
+        const response = await fetch('/api/site-content/')
+        if (!response.ok) {
+          return
+        }
+
+        const nextContent = normalizeSiteContent(await response.json())
+        if (!ignore) {
+          setSiteContent(nextContent)
+          setShowPopup(Boolean(nextContent.popup))
+        }
+      } catch {
+        // The Django-rendered page already has embedded content, so a failed dev fetch can be ignored.
+      }
+    }
+
+    loadSiteContent()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -219,8 +329,31 @@ function App() {
     setDragStartX(null)
   }
 
+  const closePopup = () => {
+    setShowPopup(false)
+  }
+
   return (
     <div className="app-shell">
+      {showPopup && siteContent.popup && (
+        <div
+          className="website-popup-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="website-popup-title"
+          onClick={closePopup}
+        >
+          <article className="website-popup" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="website-popup-close" onClick={closePopup} aria-label="Close popup">
+              &times;
+            </button>
+            <PopupMedia popup={siteContent.popup} />
+            <div className="website-popup-content">
+              <h2 id="website-popup-title">{siteContent.popup.title}</h2>
+            </div>
+          </article>
+        </div>
+      )}
       <header className="top-bar" id="home">
         <div className="container-fluid">
           <div className="row align-items-center justify-content-center">

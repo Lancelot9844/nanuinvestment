@@ -1,0 +1,76 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:myapp_dailycollection_changelist' %}">Daily Collections</a>
+    &rsaquo; {{ customer.full_name }}
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="collection-entry-page">
+    <div class="collection-entry-heading">
+      <div>
+        <h1>{{ customer.full_name }}</h1>
+        <span>Account number: {{ customer.customer_id }}</span>
+      </div>
+      <a class="button" href="{% url 'admin:myapp_dailycollection_changelist' %}">Back to Search</a>
+    </div>
+
+    <section class="collection-customer-summary" aria-label="Customer account details">
+      <div><span>Phone</span><strong>{{ customer.phone_number }}</strong></div>
+      <div><span>Citizenship number</span><strong>{{ customer.citizenship_number|default:"-" }}</strong></div>
+      <div><span>Account type</span><strong>{{ customer.get_account_type_display }}</strong></div>
+      <div><span>Opening balance</span><strong>Rs {{ customer.opening_balance|floatformat:2 }}</strong></div>
+      <div><span>Total collected</span><strong>Rs {{ collected_total|floatformat:2 }}</strong></div>
+      <div class="collection-current-total"><span>Total amount in account</span><strong>Rs {{ account_total|floatformat:2 }}</strong></div>
+    </section>
+
+    <div class="collection-entry-layout">
+      <section class="module collection-entry-form">
+        <h2>Add Collection</h2>
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% if form.non_field_errors %}
+            <div class="errornote">{{ form.non_field_errors }}</div>
+          {% endif %}
+          {% for field in form %}
+            <div class="collection-form-field{% if field.errors %} errors{% endif %}">
+              {{ field.label_tag }}
+              {{ field }}
+              {% for error in field.errors %}<p class="errornote">{{ error }}</p>{% endfor %}
+            </div>
+          {% endfor %}
+          <div class="submit-row">
+            <input type="submit" value="Add Collection">
+          </div>
+        </form>
+      </section>
+
+      <section class="module collection-history">
+        <h2>Recent Collections</h2>
+        {% if recent_collections %}
+          <div class="results">
+            <table>
+              <thead><tr><th>Date</th><th>Amount</th><th>Location</th><th>Collected by</th><th>Remarks</th></tr></thead>
+              <tbody>
+                {% for collection in recent_collections %}
+                  <tr>
+                    <td>{{ collection.collected_at|date:"d M Y, H:i" }}</td>
+                    <td>Rs {{ collection.amount|floatformat:2 }}</td>
+                    <td>{{ collection.get_visit_type_display }}</td>
+                    <td>{{ collection.collected_by|default:"-" }}</td>
+                    <td>{{ collection.note|default:"-" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="collection-history-empty">No collections recorded.</p>
+        {% endif %}
+      </section>
+    </div>
+  </div>
+{% endblock %}

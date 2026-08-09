@@ -1,0 +1,30 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Login | Nanu Investment</title>
+  <link rel="stylesheet" href="{% static 'admin-modern.css' %}">
+</head>
+<body class="customer-portal">
+  <main class="customer-auth-shell">
+    <section class="customer-auth-card">
+      <img src="{% static 'logo.jpeg' %}" alt="Nanu Investment logo">
+      <h1>Customer Login</h1>
+      {% if error %}
+        <p class="customer-error">{{ error }}</p>
+      {% endif %}
+      <form method="post">
+        {% csrf_token %}
+        <label for="id_username">Username</label>
+        <input id="id_username" type="text" name="username" autocomplete="username" required>
+        <label for="id_password">Password</label>
+        <input id="id_password" type="password" name="password" autocomplete="current-password" required>
+        <button type="submit">Log In</button>
+      </form>
+      <a class="customer-back-link" href="{% url 'home' %}">Back to website</a>
+    </section>
+  </main>
+</body>
+</html>

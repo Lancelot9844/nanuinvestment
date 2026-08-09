@@ -72,6 +72,11 @@
       background: var(--accent-red);
     }
 
+    .secondary-login-button {
+      margin-top: 10px;
+      background: #178b6f;
+    }
+
     .back-link {
       display: inline-block;
       margin-top: 18px;
@@ -85,8 +90,9 @@
   <main class="login-panel">
     <img src="{% static 'logo.jpeg' %}" alt="Nanu Investment logo" class="login-logo">
     <h1>Login</h1>
-    <p>User login and profile features will be added here.</p>
-    <a class="login-button" href="{% url 'admin:index' %}">Admin Login</a>
+    <p>Choose the right login area for your account.</p>
+    <a class="login-button" href="{% url 'customer_login' %}">Customer Login</a>
+    <a class="login-button secondary-login-button" href="{% url 'admin:index' %}">Admin / Staff Login</a>
     <a class="back-link" href="{% url 'home' %}">Back to website</a>
   </main>
 </body>

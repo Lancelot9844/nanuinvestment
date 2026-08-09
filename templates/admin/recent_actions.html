@@ -1,0 +1,51 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Home</a> &rsaquo; Recent Actions</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-dashboard">
+  <section class="dashboard-hero">
+    <div>
+      <p>Latest admin changes made from your account.</p>
+    </div>
+    <div class="dashboard-actions">
+      <a class="secondary-action" href="{% url 'admin:index' %}">Dashboard</a>
+    </div>
+  </section>
+
+  <section class="panel table-panel">
+    <div class="table-title">
+      <div>
+        <h2>Action History</h2>
+        <span>Added, changed, and deleted records from the admin panel.</span>
+      </div>
+    </div>
+    <div class="recent-actions-list">
+      {% for entry in recent_actions %}
+        <article class="recent-action-card {% if entry.is_addition %}add{% elif entry.is_change %}change{% elif entry.is_deletion %}delete{% endif %}">
+          <span class="recent-action-type">
+            {% if entry.is_addition %}Added{% elif entry.is_change %}Changed{% elif entry.is_deletion %}Deleted{% else %}Action{% endif %}
+          </span>
+          <div class="recent-action-main">
+            {% if entry.is_deletion or not entry.get_admin_url %}
+              <strong>{{ entry.object_repr }}</strong>
+            {% else %}
+              <a href="{{ entry.get_admin_url }}">{{ entry.object_repr }}</a>
+            {% endif %}
+            {% if entry.content_type %}
+              <small>{{ entry.content_type.name|capfirst }}</small>
+            {% else %}
+              <small>Unknown content</small>
+            {% endif %}
+          </div>
+          <time class="recent-action-time" datetime="{{ entry.action_time|date:'c' }}">{{ entry.action_time }}</time>
+        </article>
+      {% empty %}
+        <p class="empty-dashboard">No recent actions available.</p>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

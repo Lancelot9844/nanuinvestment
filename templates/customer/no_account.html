@@ -1,0 +1,20 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>No Customer Account | Nanu Investment</title>
+  <link rel="stylesheet" href="{% static 'admin-modern.css' %}">
+</head>
+<body class="customer-portal">
+  <main class="customer-auth-shell">
+    <section class="customer-auth-card">
+      <img src="{% static 'logo.jpeg' %}" alt="Nanu Investment logo">
+      <h1>No customer account linked</h1>
+      <p>Please contact the office to connect this login with your customer account.</p>
+      <a class="customer-back-link" href="{% url 'customer_logout' %}">Log out</a>
+    </section>
+  </main>
+</body>
+</html>

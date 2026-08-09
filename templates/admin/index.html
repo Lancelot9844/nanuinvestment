@@ -1,50 +1,171 @@
 {% extends "admin/index.html" %}
+{% load admin_metrics %}
 
 {% block nav-sidebar %}
 {% include "admin/sidebar_menu.html" %}
 {% endblock %}
 
+{% block sidebar %}{% endblock %}
+
 {% block content %}
-<div class="admin-welcome">
-  <h2>Website Management</h2>
-  <p>Use the left menu to manage website content, files, staff users, and access groups.</p>
-</div>
-<div id="content-main" class="admin-menu-grid">
-  {% if perms.myapp.view_banner %}
-    <a class="admin-menu-card" href="{% url 'admin:myapp_banner_changelist' %}">
-      <span>Banners</span>
-      <strong>Manage homepage slider images</strong>
+{% admin_dashboard_metrics as metrics %}
+<div class="admin-dashboard">
+  <section class="dashboard-hero">
+    <div>
+      <p>Live overview of customers, daily collection work, KYC approvals, tickets, and staff activity.</p>
+    </div>
+    <div class="dashboard-actions">
+      {% if perms.myapp.add_customer %}
+        <a class="primary" href="{% url 'admin:myapp_customer_add' %}">Add Customer</a>
+      {% endif %}
+      {% if perms.myapp.add_collectionrecord %}
+        <a class="secondary-action" href="{% url 'admin:myapp_collectionrecord_add' %}">Record Collection</a>
+      {% endif %}
+      <a class="secondary-action" href="{% url 'admin:myapp_reports' %}">Reports</a>
+    </div>
+  </section>
+
+  <section class="cards" aria-label="Dashboard metrics">
+    <article class="card metric">
+      <div class="metric-top"><span>Today's Collection</span><span class="metric-icon">Rs</span></div>
+      <strong>Rs {{ metrics.today_collection_amount|floatformat:2 }}</strong>
+      <span class="trend">{{ metrics.today_collection_count }} collection records today</span>
+    </article>
+    <article class="card metric">
+      <div class="metric-top"><span>Total Customers</span><span class="metric-icon">C</span></div>
+      <strong>{{ metrics.total_customers }}</strong>
+      <span class="trend">{{ metrics.new_customers_today }} newly created today</span>
+    </article>
+    <article class="card metric">
+      <div class="metric-top"><span>KYC Waiting</span><span class="metric-icon">K</span></div>
+      <strong>{{ metrics.pending_kyc }}</strong>
+      <span class="trend warn">Need approval review</span>
+    </article>
+    <article class="card metric">
+      <div class="metric-top"><span>Open Tickets</span><span class="metric-icon">T</span></div>
+      <strong>{{ metrics.open_tickets }}</strong>
+      <span class="trend">Assigned and pending work</span>
+    </article>
+  </section>
+
+  <section class="dashboard-report-grid">
+    <article class="panel">
+      <div class="panel-head">
+        <h2>Staff Collection Performance</h2>
+        <a class="link" href="{% url 'admin:myapp_collectionrecord_changelist' %}">View all</a>
+      </div>
+      <div class="report-bars">
+        {% for row in metrics.staff_chart %}
+          <div class="report-bar-row">
+            <span>{{ row.label }}</span>
+            <div class="report-bar-track"><i style="width: {{ row.percent }}%"></i></div>
+            <strong>Rs {{ row.total|floatformat:2 }}</strong>
+          </div>
+        {% empty %}
+          <p class="empty-dashboard">No collection records yet.</p>
+        {% endfor %}
+      </div>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <h2>KYC Status</h2>
+        <a class="link" href="{% url 'admin:myapp_customer_changelist' %}">Review</a>
+      </div>
+      <div class="report-donut-list">
+        {% for row in metrics.kyc_chart %}
+          <div class="report-donut-row">
+            <span class="report-dot"></span>
+            <span>{{ row.label }}</span>
+            <strong>{{ row.count }}</strong>
+            <em>{{ row.percent }}%</em>
+          </div>
+        {% empty %}
+          <p class="empty-dashboard">No customer accounts yet.</p>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+
+  <section class="panel table-panel">
+    <div class="table-title">
+      <div>
+        <h2>Recent Daily Collection Work</h2>
+        <span>Staff visits to customer shops, homes, or office collection counters.</span>
+      </div>
+      <a class="link" href="{% url 'admin:myapp_collectionrecord_add' %}">Add collection</a>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Customer</th>
+          <th>Collected By</th>
+          <th>Visit</th>
+          <th>Amount</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for collection in metrics.recent_collections %}
+          <tr>
+            <td><strong>{{ collection.customer.full_name }}</strong><span>{{ collection.customer.customer_id }}</span></td>
+            <td>{{ collection.collected_by|default:"Unassigned" }}</td>
+            <td>{{ collection.get_visit_type_display }}</td>
+            <td>Rs {{ collection.amount|floatformat:2 }}</td>
+            <td>{{ collection.collected_at }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5">No recent collection records available.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="admin-menu-grid" id="content-main">
+    {% if perms.myapp.view_customer %}
+      <a class="admin-menu-card" href="{% url 'admin:myapp_customer_changelist' %}">
+        <span>Customers &amp; KYC</span>
+        <strong>Create accounts and send KYC for approval</strong>
+      </a>
+    {% endif %}
+    {% if perms.myapp.view_collectionrecord %}
+      <a class="admin-menu-card" href="{% url 'admin:myapp_collectionrecord_changelist' %}">
+        <span>Daily Collections</span>
+        <strong>Track staff collection visits and amounts</strong>
+      </a>
+    {% endif %}
+    {% if perms.myapp.view_transaction %}
+      <a class="admin-menu-card" href="{% url 'admin:myapp_transaction_changelist' %}">
+        <span>Transactions</span>
+        <strong>Print and download customer collection bills</strong>
+      </a>
+    {% endif %}
+    <a class="admin-menu-card" href="{% url 'admin:myapp_accounting' %}">
+      <span>Accounting</span>
+      <strong>Review vouchers and financial statements</strong>
     </a>
-  {% endif %}
-  {% if perms.myapp.view_newsactivity %}
-    <a class="admin-menu-card" href="{% url 'admin:myapp_newsactivity_changelist' %}">
-      <span>News & Activities</span>
-      <strong>Publish latest updates</strong>
+    <a class="admin-menu-card" href="{% url 'admin:myapp_approvals' %}">
+      <span>Approvals</span>
+      <strong>Review KYC and staff completion requests</strong>
     </a>
-  {% endif %}
-  {% if perms.myapp.view_notice %}
-    <a class="admin-menu-card" href="{% url 'admin:myapp_notice_changelist' %}">
-      <span>Notices</span>
-      <strong>Manage member notices</strong>
-    </a>
-  {% endif %}
-  {% if perms.myapp.view_download %}
-    <a class="admin-menu-card" href="{% url 'admin:myapp_download_changelist' %}">
-      <span>Downloads</span>
-      <strong>Upload required documents</strong>
-    </a>
-  {% endif %}
-  {% if perms.auth.view_user %}
-    <a class="admin-menu-card" href="{% url 'admin:auth_user_changelist' %}">
-      <span>Staff Users</span>
-      <strong>Create staff and sub-admins</strong>
-    </a>
-  {% endif %}
-  {% if perms.auth.view_group %}
-    <a class="admin-menu-card" href="{% url 'admin:auth_group_changelist' %}">
-      <span>Access Groups</span>
-      <strong>Control staff permissions</strong>
-    </a>
-  {% endif %}
+    {% if perms.myapp.view_ticket %}
+      <a class="admin-menu-card" href="{% url 'admin:myapp_ticket_changelist' %}">
+        <span>Tickets</span>
+        <strong>Assign staff work and verify completion</strong>
+      </a>
+    {% endif %}
+    {% if perms.myapp.view_banner %}
+      <a class="admin-menu-card" href="{% url 'admin:myapp_banner_changelist' %}">
+        <span>Banners</span>
+        <strong>Manage homepage slider images</strong>
+      </a>
+    {% endif %}
+    {% if perms.auth.view_group %}
+      <a class="admin-menu-card" href="{% url 'admin:auth_group_changelist' %}">
+        <span>Access Groups</span>
+        <strong>Control staff permissions</strong>
+      </a>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}
