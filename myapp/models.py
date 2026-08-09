@@ -319,6 +319,16 @@ class CollectionRecord(SoftDeleteModel):
         HOME = "home", "Home Visit"
         OFFICE = "office", "Office Collection"
 
+    class PaymentMethod(models.TextChoices):
+        CASH = "cash", "Cash"
+        ONLINE = "online", "Online"
+
+    class DateTimeApprovalStatus(models.TextChoices):
+        NOT_REQUIRED = "not_required", "Not Required"
+        PENDING = "pending", "Pending Approval"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="collections")
     collected_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -329,7 +339,25 @@ class CollectionRecord(SoftDeleteModel):
     )
     visit_type = models.CharField(max_length=20, choices=VisitType.choices, default=VisitType.SHOP)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    collected_at = models.DateTimeField()
+    payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH)
+    payment_reference = models.CharField(max_length=120, blank=True)
+    payment_receipt = models.FileField(upload_to="payment_receipts/", blank=True)
+    collected_at = models.DateTimeField(default=timezone.now)
+    collected_at_was_manual = models.BooleanField(default=False)
+    datetime_approval_status = models.CharField(
+        max_length=20,
+        choices=DateTimeApprovalStatus.choices,
+        default=DateTimeApprovalStatus.NOT_REQUIRED,
+    )
+    datetime_approval_requested_at = models.DateTimeField(null=True, blank=True)
+    datetime_approved_at = models.DateTimeField(null=True, blank=True)
+    datetime_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_collection_datetimes",
+    )
     note = models.CharField(max_length=220, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -368,6 +396,8 @@ class Transaction(SoftDeleteModel):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     balance_after = models.DecimalField(max_digits=12, decimal_places=2)
     payment_method = models.CharField(max_length=40, default="Cash")
+    payment_reference = models.CharField(max_length=120, blank=True)
+    payment_receipt = models.FileField(upload_to="payment_receipts/", blank=True)
     visit_type = models.CharField(max_length=20, choices=CollectionRecord.VisitType.choices)
     collected_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import timedelta
 
 from django.contrib.admin.models import ADDITION, LogEntry
 from django.contrib.auth import get_user_model
@@ -557,6 +558,103 @@ class AdminInterfaceTests(TestCase):
 
         dashboard_response = self.client.get(reverse("admin:index"))
         self.assertContains(dashboard_response, reverse("admin:myapp_approvals"))
+
+    def test_manual_collection_datetime_is_counted_and_sent_for_approval(self):
+        customer = Customer.objects.create(
+            first_name="Manual",
+            last_name="Collection",
+            phone_number="9811111166",
+            address="Manual Road",
+            opening_balance=Decimal("1000.00"),
+        )
+        manual_collected_at = timezone.localtime(timezone.now() - timedelta(days=2)).replace(second=0, microsecond=0)
+        collect_url = reverse("admin:myapp_dailycollection_collect", args=[customer.pk])
+
+        response = self.client.post(
+            collect_url,
+            {
+                "amount": "150.00",
+                "visit_type": CollectionRecord.VisitType.SHOP,
+                "use_manual_collected_at": "on",
+                "manual_collected_at": manual_collected_at.strftime("%Y-%m-%dT%H:%M"),
+                "note": "Manual date request",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        collection = CollectionRecord.objects.get(note="Manual date request")
+        self.assertEqual(collection.amount, Decimal("150.00"))
+        self.assertTrue(collection.collected_at_was_manual)
+        self.assertEqual(collection.datetime_approval_status, CollectionRecord.DateTimeApprovalStatus.PENDING)
+        self.assertIsNotNone(collection.datetime_approval_requested_at)
+        self.assertEqual(collection.transaction.amount, Decimal("150.00"))
+        self.assertEqual(collection.transaction.balance_after, Decimal("1150.00"))
+
+        approvals_response = self.client.get(reverse("admin:myapp_approvals"))
+        self.assertContains(approvals_response, "Manual Collection Date/Time Requests")
+        self.assertContains(approvals_response, "Manual Collection")
+        self.assertContains(approvals_response, "Rs 150.00")
+
+        response = self.client.post(
+            reverse("admin:myapp_approvals"),
+            {"action": "approve_collection_datetime", "object_id": collection.pk},
+            follow=True,
+        )
+        collection.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(collection.datetime_approval_status, CollectionRecord.DateTimeApprovalStatus.APPROVED)
+        self.assertEqual(collection.datetime_approved_by, self.superuser)
+        self.assertIsNotNone(collection.datetime_approved_at)
+
+    def test_online_collection_requires_reference_and_stores_receipt(self):
+        customer = Customer.objects.create(
+            first_name="Online",
+            last_name="Payment",
+            phone_number="9811111177",
+            address="Online Road",
+            opening_balance=Decimal("700.00"),
+        )
+        collect_url = reverse("admin:myapp_dailycollection_collect", args=[customer.pk])
+
+        missing_reference_response = self.client.post(
+            collect_url,
+            {
+                "amount": "80.00",
+                "visit_type": CollectionRecord.VisitType.OFFICE,
+                "payment_method": CollectionRecord.PaymentMethod.ONLINE,
+                "note": "Missing online reference",
+            },
+        )
+
+        self.assertEqual(missing_reference_response.status_code, 200)
+        self.assertContains(missing_reference_response, "Enter the online reference number or transaction ID.")
+
+        receipt = SimpleUploadedFile("receipt.jpg", b"receipt-proof", content_type="image/jpeg")
+        response = self.client.post(
+            collect_url,
+            {
+                "amount": "80.00",
+                "visit_type": CollectionRecord.VisitType.OFFICE,
+                "payment_method": CollectionRecord.PaymentMethod.ONLINE,
+                "payment_reference": "ESEWA-12345",
+                "payment_receipt": receipt,
+                "note": "Online payment",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        collection = CollectionRecord.objects.get(note="Online payment")
+        transaction = collection.transaction
+        self.assertEqual(collection.payment_method, CollectionRecord.PaymentMethod.ONLINE)
+        self.assertEqual(collection.payment_reference, "ESEWA-12345")
+        self.assertTrue(collection.payment_receipt.name)
+        self.assertEqual(transaction.payment_method, "Online")
+        self.assertEqual(transaction.payment_reference, "ESEWA-12345")
+        self.assertTrue(transaction.payment_receipt.name)
+        self.assertContains(response, "ESEWA-12345")
 
     def test_customer_form_contains_add_document_inline(self):
         response = self.client.get(reverse("admin:myapp_customer_add"))

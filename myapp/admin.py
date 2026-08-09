@@ -2,6 +2,7 @@ from decimal import Decimal
 from io import BytesIO
 from urllib.parse import quote
 
+from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.contrib.admin.models import LogEntry
@@ -43,6 +44,45 @@ from .models import (
 admin.site.site_header = "Nanu Investment Admin"
 admin.site.site_title = "Nanu Investment"
 admin.site.index_title = "Website Management"
+
+
+def mark_collection_datetime_status(collection, is_manual, approved_by=None):
+    if is_manual:
+        collection.collected_at_was_manual = True
+        collection.datetime_approval_status = CollectionRecord.DateTimeApprovalStatus.PENDING
+        collection.datetime_approval_requested_at = timezone.now()
+        collection.datetime_approved_at = None
+        collection.datetime_approved_by = None
+        return
+
+    collection.collected_at_was_manual = False
+    collection.datetime_approval_status = CollectionRecord.DateTimeApprovalStatus.NOT_REQUIRED
+    collection.datetime_approval_requested_at = None
+    collection.datetime_approved_at = None
+    collection.datetime_approved_by = approved_by
+
+
+class CollectionRecordAdminForm(forms.ModelForm):
+    class Meta:
+        model = CollectionRecord
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:
+            initial_time = timezone.now()
+            self.fields["collected_at"].initial = initial_time
+
+    def did_manual_collected_at_change(self):
+        return "collected_at" in self.changed_data
+
+    def clean(self):
+        cleaned_data = super().clean()
+        payment_method = cleaned_data.get("payment_method")
+        payment_reference = (cleaned_data.get("payment_reference") or "").strip()
+        if payment_method == CollectionRecord.PaymentMethod.ONLINE and not payment_reference:
+            self.add_error("payment_reference", "Enter the online reference number or transaction ID.")
+        return cleaned_data
 
 
 @admin.action(description="Move selected records to Recycle Bin")
@@ -569,7 +609,9 @@ def sync_collection_transaction(collection):
             "customer": collection.customer,
             "amount": collection.amount,
             "balance_after": balance_after,
-            "payment_method": "Cash",
+            "payment_method": collection.get_payment_method_display(),
+            "payment_reference": collection.payment_reference,
+            "payment_receipt": collection.payment_receipt,
             "status": Transaction.Status.COMPLETED,
             "visit_type": collection.visit_type,
             "collected_by": collection.collected_by,
@@ -640,6 +682,8 @@ def build_receipt_image(transaction_obj):
         ("Payment Method", transaction_obj.payment_method),
         ("Collection Location", transaction_obj.get_visit_type_display()),
     ]
+    if transaction_obj.payment_reference:
+        summary.append(("Reference ID", transaction_obj.payment_reference))
     for index, (label, value) in enumerate(summary):
         left = 88 if index % 2 == 0 else 620
         top = y + (index // 2) * 92
@@ -759,14 +803,22 @@ class DailyCollectionAdmin(admin.ModelAdmin):
 
         customer = get_object_or_404(Customer, pk=customer_id)
         if request.method == "POST":
-            form = DailyCollectionEntryForm(request.POST)
+            form = DailyCollectionEntryForm(request.POST, request.FILES)
             if form.is_valid():
                 collection = form.save(commit=False)
                 collection.customer = customer
                 collection.collected_by = request.user
-                collection.collected_at = timezone.now()
+                collected_at, is_manual_datetime = form.get_collection_datetime()
+                collection.collected_at = collected_at
+                mark_collection_datetime_status(collection, is_manual_datetime)
                 collection.save()
                 transaction_obj = sync_collection_transaction(collection)
+                if is_manual_datetime:
+                    self.message_user(
+                        request,
+                        "Manual collection date/time saved and sent to Approvals. Collection is counted normally.",
+                        messages.WARNING,
+                    )
                 self.message_user(
                     request,
                     f"Rs {collection.amount:.2f} collected for {customer.full_name}. Transaction {transaction_obj.transaction_id} generated.",
@@ -825,15 +877,46 @@ class DailyCollectionAdmin(admin.ModelAdmin):
 
 @admin.register(CollectionRecord)
 class CollectionRecordAdmin(RecycleAdminMixin, admin.ModelAdmin):
-    list_display = ("customer", "amount", "visit_type", "collected_by", "collected_at", "transaction_link", "note")
-    list_filter = ("visit_type", "collected_by", "collected_at")
-    search_fields = ("customer__first_name", "customer__last_name", "customer__customer_id", "note")
-    autocomplete_fields = ("customer", "collected_by")
+    form = CollectionRecordAdminForm
+    list_display = (
+        "customer",
+        "amount",
+        "payment_method",
+        "payment_reference",
+        "visit_type",
+        "collected_by",
+        "collected_at",
+        "datetime_approval_badge",
+        "transaction_link",
+        "note",
+    )
+    list_filter = ("payment_method", "visit_type", "collected_by", "datetime_approval_status", "collected_at")
+    search_fields = ("customer__first_name", "customer__last_name", "customer__customer_id", "payment_reference", "note")
+    autocomplete_fields = ("customer",)
+    readonly_fields = (
+        "payment_receipt_link",
+        "datetime_approval_status",
+        "datetime_approval_requested_at",
+        "datetime_approved_at",
+        "datetime_approved_by",
+    )
     date_hierarchy = "collected_at"
     ordering = ("-collected_at",)
     list_per_page = 25
     fieldsets = (
-        ("Collection", {"fields": ("customer", "amount", "visit_type", "collected_by", "collected_at")}),
+        ("Collection", {"fields": ("customer", "amount", "visit_type", "collected_at")}),
+        ("Payment", {"fields": ("payment_method", "payment_reference", "payment_receipt", "payment_receipt_link")}),
+        (
+            "Date/Time Approval",
+            {
+                "fields": (
+                    "datetime_approval_status",
+                    "datetime_approval_requested_at",
+                    "datetime_approved_at",
+                    "datetime_approved_by",
+                )
+            },
+        ),
         ("Visit Note", {"fields": ("note",)}),
     )
 
@@ -843,8 +926,22 @@ class CollectionRecordAdmin(RecycleAdminMixin, admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         if not obj.collected_by_id:
             obj.collected_by = request.user
+        if not obj.collected_at:
+            obj.collected_at = timezone.now()
+            mark_collection_datetime_status(obj, False)
+        elif form.did_manual_collected_at_change():
+            mark_collection_datetime_status(obj, True)
+        elif not change and not obj.collected_at_was_manual:
+            mark_collection_datetime_status(obj, False)
         super().save_model(request, obj, form, change)
         sync_collection_transaction(obj)
+
+        if obj.datetime_approval_status == CollectionRecord.DateTimeApprovalStatus.PENDING:
+            self.message_user(
+                request,
+                "Manual collection date/time saved and sent to Approvals. Collection is counted normally.",
+                messages.WARNING,
+            )
 
     def transaction_link(self, obj):
         transaction_obj = getattr(obj, "transaction", None)
@@ -854,6 +951,28 @@ class CollectionRecordAdmin(RecycleAdminMixin, admin.ModelAdmin):
         return format_html('<a class="button" href="{}">Receipt</a>', url)
 
     transaction_link.short_description = "Transaction"
+
+    def payment_receipt_link(self, obj):
+        if not obj or not obj.payment_receipt:
+            return "-"
+        return format_html('<a class="button" href="{}" target="_blank">View Receipt</a>', obj.payment_receipt.url)
+
+    payment_receipt_link.short_description = "Uploaded payment receipt"
+
+    def datetime_approval_badge(self, obj):
+        status_classes = {
+            CollectionRecord.DateTimeApprovalStatus.NOT_REQUIRED: "status-active",
+            CollectionRecord.DateTimeApprovalStatus.PENDING: "status-pending",
+            CollectionRecord.DateTimeApprovalStatus.APPROVED: "status-active",
+            CollectionRecord.DateTimeApprovalStatus.REJECTED: "status-hidden",
+        }
+        return format_html(
+            '<span class="admin-status {}">{}</span>',
+            status_classes.get(obj.datetime_approval_status, "status-pending"),
+            obj.get_datetime_approval_status_display(),
+        )
+
+    datetime_approval_badge.short_description = "Date/Time Approval"
 
 
 @admin.register(Transaction)
@@ -865,6 +984,7 @@ class TransactionAdmin(RecycleAdminMixin, admin.ModelAdmin):
         "balance_after",
         "status",
         "payment_method",
+        "payment_reference",
         "collected_by",
         "transacted_at",
         "receipt_actions",
@@ -887,6 +1007,9 @@ class TransactionAdmin(RecycleAdminMixin, admin.ModelAdmin):
         "balance_after",
         "status",
         "payment_method",
+        "payment_reference",
+        "payment_receipt",
+        "payment_receipt_link",
         "visit_type",
         "collected_by",
         "note",
@@ -898,6 +1021,13 @@ class TransactionAdmin(RecycleAdminMixin, admin.ModelAdmin):
     date_hierarchy = "transacted_at"
     ordering = ("-transacted_at", "-id")
     list_per_page = 30
+
+    def payment_receipt_link(self, obj):
+        if not obj or not obj.payment_receipt:
+            return "-"
+        return format_html('<a class="button" href="{}" target="_blank">View Receipt</a>', obj.payment_receipt.url)
+
+    payment_receipt_link.short_description = "Uploaded payment receipt"
 
     def get_urls(self):
         custom_urls = [
@@ -1363,16 +1493,48 @@ def admin_approvals_view(request):
             messages.success(request, message)
             return redirect("admin:myapp_approvals")
 
+        if action in {"approve_collection_datetime", "reject_collection_datetime"}:
+            collection = get_object_or_404(CollectionRecord, pk=object_id)
+            if not request.user.has_perm("myapp.change_collectionrecord"):
+                raise PermissionDenied
+            if collection.datetime_approval_status != CollectionRecord.DateTimeApprovalStatus.PENDING:
+                messages.warning(request, "This collection date/time is no longer waiting for approval.")
+                return redirect("admin:myapp_approvals")
+            if action == "approve_collection_datetime":
+                collection.datetime_approval_status = CollectionRecord.DateTimeApprovalStatus.APPROVED
+                collection.datetime_approved_at = timezone.now()
+                collection.datetime_approved_by = request.user
+                message = f"Collection date/time approved for {collection.customer.full_name}."
+            else:
+                collection.datetime_approval_status = CollectionRecord.DateTimeApprovalStatus.REJECTED
+                collection.datetime_approved_at = timezone.now()
+                collection.datetime_approved_by = request.user
+                message = f"Collection date/time rejected for {collection.customer.full_name}."
+            collection.save(
+                update_fields=(
+                    "datetime_approval_status",
+                    "datetime_approved_at",
+                    "datetime_approved_by",
+                )
+            )
+            messages.success(request, message)
+            return redirect("admin:myapp_approvals")
+
     pending_kyc = Customer.objects.filter(kyc_status=Customer.KycStatus.PENDING).order_by("-submitted_for_approval_at", "-created_at")
     pending_tickets = Ticket.objects.select_related("customer", "created_by", "assigned_to").filter(
         status=Ticket.Status.STAFF_COMPLETED,
     ).order_by("-staff_completed_at", "-created_at")
+    pending_collection_datetimes = CollectionRecord.objects.select_related("customer", "collected_by").filter(
+        datetime_approval_status=CollectionRecord.DateTimeApprovalStatus.PENDING,
+        is_deleted=False,
+    ).order_by("-datetime_approval_requested_at", "-created_at")
     context = {
         **admin.site.each_context(request),
         "title": "Approvals",
         "pending_kyc": pending_kyc,
         "pending_tickets": pending_tickets,
-        "approval_count": pending_kyc.count() + pending_tickets.count(),
+        "pending_collection_datetimes": pending_collection_datetimes,
+        "approval_count": pending_kyc.count() + pending_tickets.count() + pending_collection_datetimes.count(),
     }
     return TemplateResponse(request, "admin/approvals.html", context)
 

@@ -1,5 +1,7 @@
 from django import template
 from django.contrib.auth import get_user_model
+from datetime import timedelta
+
 from django.db.models import Count, Sum
 from django.utils import timezone
 
@@ -19,9 +21,16 @@ def get_admin_metrics():
     today = timezone.localdate()
     active_collections = CollectionRecord.objects.filter(customer__is_deleted=False)
     today_collections = active_collections.filter(collected_at__date=today)
+    yesterday_collections = active_collections.filter(collected_at__date=today - timedelta(days=1))
+    month_collections = active_collections.filter(collected_at__year=today.year, collected_at__month=today.month)
     total_customers = Customer.objects.count()
     new_customers_today = Customer.objects.filter(created_at__date=today).count()
     total_collection_amount = today_collections.aggregate(total=Sum("amount"))["total"] or 0
+    yesterday_collection_amount = yesterday_collections.aggregate(total=Sum("amount"))["total"] or 0
+    month_collection_amount = month_collections.aggregate(total=Sum("amount"))["total"] or 0
+    total_opening_balance = Customer.objects.aggregate(total=Sum("opening_balance"))["total"] or 0
+    total_collected_amount = active_collections.aggregate(total=Sum("amount"))["total"] or 0
+    total_savings = total_opening_balance + total_collected_amount
     recent_collections = active_collections.select_related("customer", "collected_by")[:8]
 
     kyc_rows = list(Customer.objects.values("kyc_status").annotate(count=Count("id")).order_by("kyc_status"))
@@ -71,19 +80,68 @@ def get_admin_metrics():
         for row in account_rows
     ]
 
+    weekly_days = [today - timedelta(days=offset) for offset in range(6, -1, -1)]
+    weekly_totals = []
+    for day in weekly_days:
+        total = active_collections.filter(collected_at__date=day).aggregate(total=Sum("amount"))["total"] or 0
+        weekly_totals.append({"label": day.strftime("%a"), "total": total})
+    max_weekly_total = max([row["total"] for row in weekly_totals], default=0)
+    weekly_collection_chart = [
+        {
+            "label": row["label"],
+            "total": row["total"],
+            "percent": max(percent(row["total"], max_weekly_total), 8) if row["total"] else 0,
+        }
+        for row in weekly_totals
+    ]
+
+    if yesterday_collection_amount:
+        today_collection_change_percent = round(
+            ((total_collection_amount - yesterday_collection_amount) / yesterday_collection_amount) * 100,
+            1,
+        )
+    else:
+        today_collection_change_percent = 100 if total_collection_amount else 0
+
+    staff_completed_tickets = Ticket.objects.filter(status=Ticket.Status.STAFF_COMPLETED).count()
+    pending_kyc_count = Customer.objects.filter(kyc_status=Customer.KycStatus.PENDING).count()
+    pending_collection_datetime_count = CollectionRecord.objects.filter(
+        datetime_approval_status=CollectionRecord.DateTimeApprovalStatus.PENDING,
+        is_deleted=False,
+    ).count()
+    assigned_open_tickets = Ticket.objects.filter(status__in=[Ticket.Status.OPEN, Ticket.Status.ASSIGNED]).count()
+    fixed_deposit_accounts = Customer.objects.filter(account_type=Customer.AccountType.FIXED).count()
+    cash_collectors_pending = (
+        today_collections.exclude(collected_by__isnull=True).values("collected_by").distinct().count()
+    )
+
     return {
         "total_customers": total_customers,
         "new_customers_today": new_customers_today,
         "staff_count": get_user_model().objects.filter(is_staff=True).count(),
         "today_collection_amount": total_collection_amount,
+        "today_collection_change_percent": today_collection_change_percent,
         "today_collection_count": today_collections.count(),
-        "pending_kyc": Customer.objects.filter(kyc_status=Customer.KycStatus.PENDING).count(),
+        "month_collection_amount": month_collection_amount,
+        "total_savings": total_savings,
+        "loan_outstanding": 0,
+        "loan_overdue": 0,
+        "cash_to_reconcile": total_collection_amount,
+        "cash_collectors_pending": cash_collectors_pending,
+        "pending_kyc": pending_kyc_count,
+        "approval_count": pending_kyc_count + staff_completed_tickets + pending_collection_datetime_count,
+        "pending_collection_datetime_count": pending_collection_datetime_count,
+        "staff_completed_tickets": staff_completed_tickets,
+        "assigned_open_tickets": assigned_open_tickets,
+        "fixed_deposit_accounts": fixed_deposit_accounts,
         "open_tickets": Ticket.objects.exclude(status=Ticket.Status.VERIFIED_COMPLETED).count(),
         "recent_collections": recent_collections,
         "kyc_chart": kyc_chart,
         "staff_chart": staff_chart,
         "ticket_chart": ticket_chart,
         "account_chart": account_chart,
+        "weekly_collection_chart": weekly_collection_chart,
+        "weekly_collection_total": sum(row["total"] for row in weekly_totals),
     }
 
 

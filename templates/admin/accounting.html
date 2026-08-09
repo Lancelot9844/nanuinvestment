@@ -4,6 +4,8 @@
 <div class="breadcrumbs"><a href="{% url 'admin:index' %}">Home</a> &rsaquo; Accounting</div>
 {% endblock %}
 
+{% block content_title %}{% endblock %}
+
 {% block content %}
 <div class="accounting-page">
   <section class="accounting-hero">
@@ -62,6 +64,8 @@
             <th>Voucher</th>
             <th>Date</th>
             <th>Particular</th>
+            <th>Method</th>
+            <th>Reference</th>
             <th>Debit</th>
             <th>Credit</th>
             <th>Status</th>
@@ -73,13 +77,15 @@
               <td><a href="{% url 'admin:myapp_transaction_receipt' row.pk %}">{{ row.transaction_id }}</a></td>
               <td>{{ row.transacted_at|date:"M d" }}</td>
               <td>Collection from {{ row.customer.full_name }}</td>
+              <td>{{ row.payment_method }}</td>
+              <td>{{ row.payment_reference|default:"-" }}</td>
               <td>—</td>
               <td>Rs {{ row.amount|floatformat:2 }}</td>
               <td><span class="accounting-status accounting-status-{{ row.status }}">{{ row.get_status_display }}</span></td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="6" class="accounting-empty">No accounting vouchers found.</td>
+              <td colspan="8" class="accounting-empty">No accounting vouchers found.</td>
             </tr>
           {% endfor %}
         </tbody>

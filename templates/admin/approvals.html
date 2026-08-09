@@ -88,6 +88,43 @@
         {% endfor %}
       </div>
     </article>
+
+    <article class="approvals-panel">
+      <div class="approvals-panel-head">
+        <div>
+          <h2>Manual Collection Date/Time Requests</h2>
+          <p>Collections saved with a manually selected date/time. These collections are already counted normally.</p>
+        </div>
+      </div>
+      <div class="approvals-list">
+        {% for collection in pending_collection_datetimes %}
+          <div class="approval-item">
+            <div>
+              <strong>{{ collection.customer.full_name }}</strong>
+              <span>Rs {{ collection.amount|floatformat:2 }} - {{ collection.get_visit_type_display }} - Collected by {{ collection.collected_by|default:"-" }}</span>
+              <small>Manual date/time: {{ collection.collected_at|date:"d M Y, H:i" }} | Requested {{ collection.datetime_approval_requested_at|date:"d M Y, H:i"|default:"-" }}</small>
+            </div>
+            <div class="approval-actions">
+              <a class="approval-secondary" href="{% url 'admin:myapp_collectionrecord_change' collection.pk %}">Review</a>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="approve_collection_datetime">
+                <input type="hidden" name="object_id" value="{{ collection.pk }}">
+                <button type="submit">Approve</button>
+              </form>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reject_collection_datetime">
+                <input type="hidden" name="object_id" value="{{ collection.pk }}">
+                <button class="approval-danger" type="submit">Reject</button>
+              </form>
+            </div>
+          </div>
+        {% empty %}
+          <p class="approval-empty">No manual collection date/time requests waiting for approval.</p>
+        {% endfor %}
+      </div>
+    </article>
   </section>
 </div>
 {% endblock %}

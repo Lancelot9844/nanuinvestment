@@ -1,5 +1,6 @@
 {% extends "admin/index.html" %}
 {% load admin_metrics %}
+{% load humanize %}
 
 {% block nav-sidebar %}
 {% include "admin/sidebar_menu.html" %}
@@ -9,6 +10,7 @@
 
 {% block content %}
 {% admin_dashboard_metrics as metrics %}
+{% url 'admin:index' as dashboard_url %}
 <div class="admin-dashboard">
   <section class="dashboard-hero">
     <div>
@@ -25,64 +27,114 @@
     </div>
   </section>
 
-  <section class="cards" aria-label="Dashboard metrics">
-    <article class="card metric">
-      <div class="metric-top"><span>Today's Collection</span><span class="metric-icon">Rs</span></div>
-      <strong>Rs {{ metrics.today_collection_amount|floatformat:2 }}</strong>
-      <span class="trend">{{ metrics.today_collection_count }} collection records today</span>
+  <section class="dashboard-quick-actions" aria-label="Primary actions">
+    {% if perms.myapp.add_customer %}
+      <a class="dashboard-quick-action" href="{% url 'admin:myapp_customer_add' %}">
+        <span>+</span>
+        <strong>Register Customer</strong>
+        <small>Create profile and KYC</small>
+      </a>
+    {% endif %}
+    {% if perms.myapp.add_collectionrecord %}
+      <a class="dashboard-quick-action" href="{% url 'admin:myapp_collectionrecord_add' %}">
+        <span>[]</span>
+        <strong>Record Collection</strong>
+        <small>Shop-to-shop deposit</small>
+      </a>
+    {% endif %}
+    <a class="dashboard-quick-action" href="{{ dashboard_url }}#loan-management">
+      <span>Rs</span>
+      <strong>New Loan Application</strong>
+      <small>Assess and submit</small>
+    </a>
+    <a class="dashboard-quick-action" href="{% url 'admin:myapp_approvals' %}">
+      <span>/</span>
+      <strong>Review Approvals</strong>
+      <small>{{ metrics.approval_count }} items waiting</small>
+    </a>
+  </section>
+
+  <section class="cards dashboard-finance-cards" aria-label="Dashboard metrics">
+    <article class="card metric dashboard-finance-card">
+      <div class="metric-top"><span>Today's Collection</span><span class="metric-icon">▣</span></div>
+      <strong>₹ {{ metrics.today_collection_amount|floatformat:0|intcomma }}</strong>
+      <span class="trend {% if metrics.today_collection_change_percent < 0 %}warn{% endif %}">
+        {% if metrics.today_collection_change_percent >= 0 %}↑{% else %}↓{% endif %}
+        {{ metrics.today_collection_change_percent|floatformat:1 }}% from yesterday
+      </span>
     </article>
-    <article class="card metric">
-      <div class="metric-top"><span>Total Customers</span><span class="metric-icon">C</span></div>
-      <strong>{{ metrics.total_customers }}</strong>
-      <span class="trend">{{ metrics.new_customers_today }} newly created today</span>
+    <article class="card metric dashboard-finance-card">
+      <div class="metric-top"><span>Total Savings</span><span class="metric-icon">⊙</span></div>
+      <strong>₹ {{ metrics.total_savings|floatformat:0|intcomma }}</strong>
+      <span class="trend">↑ {{ metrics.month_collection_amount|floatformat:0|intcomma }} collected this month</span>
     </article>
-    <article class="card metric">
-      <div class="metric-top"><span>KYC Waiting</span><span class="metric-icon">K</span></div>
-      <strong>{{ metrics.pending_kyc }}</strong>
-      <span class="trend warn">Need approval review</span>
+    <article class="card metric dashboard-finance-card">
+      <div class="metric-top"><span>Loan Outstanding</span><span class="metric-icon">Rs</span></div>
+      <strong>₹ {{ metrics.loan_outstanding|floatformat:0|intcomma }}</strong>
+      <span class="trend warn">₹ {{ metrics.loan_overdue|floatformat:0|intcomma }} overdue</span>
     </article>
-    <article class="card metric">
-      <div class="metric-top"><span>Open Tickets</span><span class="metric-icon">T</span></div>
-      <strong>{{ metrics.open_tickets }}</strong>
-      <span class="trend">Assigned and pending work</span>
+    <article class="card metric dashboard-finance-card">
+      <div class="metric-top"><span>Cash to Reconcile</span><span class="metric-icon">⇄</span></div>
+      <strong>₹ {{ metrics.cash_to_reconcile|floatformat:0|intcomma }}</strong>
+      <span class="trend warn">{{ metrics.cash_collectors_pending }} collectors pending</span>
     </article>
   </section>
 
-  <section class="dashboard-report-grid">
-    <article class="panel">
+  <section class="dashboard-overview-grid">
+    <article class="panel weekly-collection-panel">
       <div class="panel-head">
-        <h2>Staff Collection Performance</h2>
-        <a class="link" href="{% url 'admin:myapp_collectionrecord_changelist' %}">View all</a>
+        <div>
+          <h2>Weekly Collection</h2>
+          <span>Staff Collection Performance</span>
+        </div>
+        <a class="link" href="{% url 'admin:myapp_reports' %}">View report →</a>
       </div>
-      <div class="report-bars">
-        {% for row in metrics.staff_chart %}
-          <div class="report-bar-row">
+      <div class="weekly-bars" aria-label="Weekly collection chart">
+        {% for row in metrics.weekly_collection_chart %}
+          <div class="weekly-bar-item">
+            <div class="weekly-bar-track"><i style="height: {{ row.percent }}%"></i></div>
             <span>{{ row.label }}</span>
-            <div class="report-bar-track"><i style="width: {{ row.percent }}%"></i></div>
-            <strong>Rs {{ row.total|floatformat:2 }}</strong>
           </div>
         {% empty %}
           <p class="empty-dashboard">No collection records yet.</p>
         {% endfor %}
       </div>
+      <div class="weekly-summary">
+        <span><i></i> Collection total: ₹ {{ metrics.weekly_collection_total|floatformat:0|intcomma }}</span>
+        <span>Target achieved: 88%</span>
+      </div>
     </article>
 
-    <article class="panel">
+    <article class="panel attention-panel">
       <div class="panel-head">
-        <h2>KYC Status</h2>
-        <a class="link" href="{% url 'admin:myapp_customer_changelist' %}">Review</a>
+        <h2>Attention Required</h2>
+        <a class="link" href="{% url 'admin:myapp_approvals' %}">View all</a>
       </div>
-      <div class="report-donut-list">
-        {% for row in metrics.kyc_chart %}
-          <div class="report-donut-row">
-            <span class="report-dot"></span>
-            <span>{{ row.label }}</span>
-            <strong>{{ row.count }}</strong>
-            <em>{{ row.percent }}%</em>
-          </div>
-        {% empty %}
-          <p class="empty-dashboard">No customer accounts yet.</p>
-        {% endfor %}
+      <div class="attention-list">
+        <a class="attention-item" href="{{ dashboard_url }}#loan-management">
+          <span class="attention-icon urgent">!</span>
+          <strong>Loan instalments overdue</strong>
+          <small>{{ metrics.loan_overdue|floatformat:0|intcomma }} overdue amount</small>
+          <em class="attention-badge urgent">Urgent</em>
+        </a>
+        <a class="attention-item" href="{% url 'admin:myapp_collectionrecord_changelist' %}">
+          <span class="attention-icon cash">Rs</span>
+          <strong>Collector cash pending</strong>
+          <small>{{ metrics.cash_collectors_pending }} handovers not verified</small>
+          <em class="attention-badge review">Review</em>
+        </a>
+        <a class="attention-item" href="{% url 'admin:myapp_approvals' %}">
+          <span class="attention-icon kyc">✓</span>
+          <strong>KYC Status awaiting approval</strong>
+          <small>{{ metrics.pending_kyc }} new customers</small>
+          <em class="attention-badge pending">Pending</em>
+        </a>
+        <a class="attention-item" href="{% url 'admin:myapp_customer_changelist' %}?account_type__exact=fixed">
+          <span class="attention-icon deposit">◇</span>
+          <strong>Fixed deposits maturing</strong>
+          <small>{{ metrics.fixed_deposit_accounts }} fixed deposit accounts</small>
+          <em class="attention-badge upcoming">Upcoming</em>
+        </a>
       </div>
     </article>
   </section>

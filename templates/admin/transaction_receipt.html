@@ -33,6 +33,9 @@
       <div><span>Date</span><strong>{{ transaction.transacted_at|date:"d M Y, H:i" }}</strong></div>
       <div><span>Status</span><strong>{{ transaction.get_status_display }}</strong></div>
       <div><span>Payment Method</span><strong>{{ transaction.payment_method }}</strong></div>
+      {% if transaction.payment_reference %}
+        <div><span>Reference / Transaction ID</span><strong>{{ transaction.payment_reference }}</strong></div>
+      {% endif %}
       <div><span>Collection Location</span><strong>{{ transaction.get_visit_type_display }}</strong></div>
     </div>
 
@@ -51,6 +54,9 @@
         <dl>
           <dt>Collected By</dt><dd>{{ transaction.collected_by|default:"-" }}</dd>
           <dt>Transaction Type</dt><dd>{{ transaction.get_transaction_type_display }}</dd>
+          {% if transaction.payment_receipt %}
+            <dt>Payment Receipt</dt><dd><a href="{{ transaction.payment_receipt.url }}" target="_blank">View uploaded receipt</a></dd>
+          {% endif %}
           <dt>Remarks</dt><dd>{{ transaction.note|default:"-" }}</dd>
         </dl>
       </section>
