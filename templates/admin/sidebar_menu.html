@@ -24,19 +24,27 @@
     <a class="{% if request.path == dashboard_url %}active{% endif %}" href="{{ dashboard_url }}"><i>#</i><span>Dashboard</span></a>
     {% if perms.myapp.view_customer %}
       {% url 'admin:myapp_customer_changelist' as customers_url %}
-      <a class="{% if customers_url in request.path %}active{% endif %}" href="{{ customers_url }}"><i>C</i><span>Customers &amp; KYC</span></a>
+      <a class="{% if customers_url in request.path and request.GET.account_type__exact != 'savings' %}active{% endif %}" href="{{ customers_url }}"><i>C</i><span>Customers &amp; KYC</span></a>
     {% endif %}
     {% if perms.myapp.view_ebankingcredential %}
       {% url 'admin:myapp_ebankingcredential_changelist' as ebanking_url %}
       <a class="{% if ebanking_url in request.path %}active{% endif %}" href="{{ ebanking_url }}"><i>E</i><span>E-Banking</span></a>
     {% endif %}
-    <a href="{{ dashboard_url }}#saving-accounts"><i>S</i><span>Saving Accounts</span></a>
+    {% if perms.myapp.view_customer %}
+      <a class="{% if customers_url in request.path and request.GET.account_type__exact == 'savings' %}active{% endif %}" href="{{ customers_url }}?account_type__exact=savings"><i>S</i><span>Saving Accounts</span></a>
+    {% endif %}
     {% if perms.myapp.view_dailycollection %}
       {% url 'admin:myapp_dailycollection_changelist' as daily_collections_url %}
       <a class="{% if daily_collections_url in request.path %}active{% endif %}" href="{{ daily_collections_url }}"><i>D</i><span>Daily Collections</span></a>
     {% endif %}
-    <a href="{{ dashboard_url }}#loan-management"><i>L</i><span>Loan Management</span></a>
-    <a href="{{ dashboard_url }}#fixed-recurring-deposit"><i>F</i><span>Fixed / Recurring Deposit</span></a>
+    {% if perms.myapp.view_loanapplication %}
+      {% url 'admin:myapp_loanapplication_changelist' as loans_url %}
+      <a class="{% if loans_url in request.path %}active{% endif %}" href="{{ loans_url }}"><i>L</i><span>Loan Management</span></a>
+    {% endif %}
+    {% if perms.myapp.view_depositaccount %}
+      {% url 'admin:myapp_depositaccount_changelist' as deposits_url %}
+      <a class="{% if deposits_url in request.path %}active{% endif %}" href="{{ deposits_url }}"><i>F</i><span>Fixed / Recurring Deposit</span></a>
+    {% endif %}
     {% if perms.myapp.view_ticket %}
       {% url 'admin:myapp_ticket_changelist' as tickets_url %}
       <a class="{% if tickets_url in request.path %}active{% endif %}" href="{{ tickets_url }}"><i>T</i><span>Ticket Created</span></a>
@@ -47,7 +55,12 @@
       {% url 'admin:myapp_transaction_changelist' as transactions_url %}
       <a class="{% if transactions_url in request.path %}active{% endif %}" href="{{ transactions_url }}"><i>X</i><span>Transactions</span></a>
     {% endif %}
-    <a href="{{ dashboard_url }}#cash-bank"><i>$</i><span>Cash &amp; Bank</span></a>
+    {% if perms.myapp.view_smsdelivery %}
+      {% url 'admin:myapp_smsdelivery_changelist' as sms_messages_url %}
+      <a class="{% if sms_messages_url in request.path %}active{% endif %}" href="{{ sms_messages_url }}"><i>M</i><span>SMS Messages</span></a>
+    {% endif %}
+    {% url 'admin:myapp_calculator' as calculator_url %}
+    <a class="{% if request.path == calculator_url %}active{% endif %}" href="{{ calculator_url }}"><i>#</i><span>Calculator</span></a>
     {% url 'admin:myapp_accounting' as accounting_url %}
     <a class="{% if request.path == accounting_url %}active{% endif %}" href="{{ accounting_url }}"><i>A</i><span>Accounting</span></a>
     {% url 'admin:myapp_approvals' as approvals_url %}
@@ -90,8 +103,12 @@
       {% url 'admin:myapp_recyclebinitem_changelist' as recycle_bin_url %}
       <a class="{% if recycle_bin_url in request.path %}active{% endif %}" href="{{ recycle_bin_url }}"><i>R</i><span>Recycle Bin</span></a>
     {% endif %}
-    <a href="{{ dashboard_url }}#audit-security"><i>!</i><span>Audit &amp; Security</span></a>
-    <a href="{{ dashboard_url }}#system-setting"><i>G</i><span>System Setting</span></a>
+    {% url 'admin:myapp_audit_security' as audit_security_url %}
+    <a class="{% if request.path == audit_security_url %}active{% endif %}" href="{{ audit_security_url }}"><i>!</i><span>Audit &amp; Security</span></a>
+    {% if request.user.is_superuser %}
+      {% url 'admin:myapp_system_settings' as system_settings_url %}
+      <a class="{% if '/admin/myapp/systemsetting/' in request.path or request.path == system_settings_url %}active{% endif %}" href="{{ system_settings_url }}"><i>G</i><span>System Setting</span></a>
+    {% endif %}
     {% if request.user.is_authenticated %}
       {% url 'admin:myapp_staff_profile_settings' as profile_url %}
       <a class="{% if request.path == profile_url %}active{% endif %}" href="{{ profile_url }}"><i>P</i><span>My Profile</span></a>

@@ -2,6 +2,8 @@ from decimal import Decimal
 from io import BytesIO
 from urllib.parse import quote
 
+from django import forms
+from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.contrib.admin.models import LogEntry
@@ -9,6 +11,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import SetPasswordForm
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.sessions.models import Session
 from django.core.exceptions import PermissionDenied
 from django.db import models
 from django.db.models.functions import Coalesce
@@ -29,20 +32,146 @@ from .models import (
     Customer,
     CustomerKYCDocument,
     DailyCollection,
+    DepositAccount,
+    DepositPayment,
     Download,
     EBankingCredential,
+    LoanApplication,
+    LoanRepayment,
     NewsActivity,
     Notice,
     RecycleBinItem,
+    SecurityEvent,
+    SMSDelivery,
+    SystemSetting,
     Ticket,
     Transaction,
     WebsitePopup,
+)
+from .sms import (
+    attempt_sms_delivery,
+    build_ebanking_login_message,
+    normalize_nepal_mobile,
+    send_ebanking_login_sms,
+    send_temporary_password_sms,
 )
 
 
 admin.site.site_header = "Nanu Investment Admin"
 admin.site.site_title = "Nanu Investment"
 admin.site.index_title = "Website Management"
+
+
+def mark_collection_datetime_status(collection, is_manual, approved_by=None):
+    if is_manual:
+        collection.collected_at_was_manual = True
+        collection.datetime_approval_status = CollectionRecord.DateTimeApprovalStatus.PENDING
+        collection.datetime_approval_requested_at = timezone.now()
+        collection.datetime_approved_at = None
+        collection.datetime_approved_by = None
+        return
+
+    collection.collected_at_was_manual = False
+    collection.datetime_approval_status = CollectionRecord.DateTimeApprovalStatus.NOT_REQUIRED
+    collection.datetime_approval_requested_at = None
+    collection.datetime_approved_at = None
+    collection.datetime_approved_by = approved_by
+
+
+class CollectionRecordAdminForm(forms.ModelForm):
+    class Meta:
+        model = CollectionRecord
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:
+            initial_time = timezone.now()
+            self.fields["collected_at"].initial = initial_time
+
+    def did_manual_collected_at_change(self):
+        return "collected_at" in self.changed_data
+
+    def clean(self):
+        cleaned_data = super().clean()
+        payment_method = cleaned_data.get("payment_method")
+        payment_reference = (cleaned_data.get("payment_reference") or "").strip()
+        if payment_method == CollectionRecord.PaymentMethod.ONLINE and not payment_reference:
+            self.add_error("payment_reference", "Enter the online reference number or transaction ID.")
+        return cleaned_data
+
+
+class LoanApplicationAdminForm(forms.ModelForm):
+    class Meta:
+        model = LoanApplication
+        fields = "__all__"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        status = cleaned_data.get("status")
+        approved_amount = cleaned_data.get("approved_amount")
+        requested_amount = cleaned_data.get("requested_amount")
+        if requested_amount is not None and requested_amount <= 0:
+            self.add_error("requested_amount", "Loan amount must be greater than zero.")
+        if status == LoanApplication.Status.APPROVED and approved_amount is not None and approved_amount <= 0:
+            cleaned_data["approved_amount"] = requested_amount
+        return cleaned_data
+
+
+class LoanRepaymentAdminForm(forms.ModelForm):
+    class Meta:
+        model = LoanRepayment
+        fields = "__all__"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        amount = cleaned_data.get("amount")
+        payment_method = cleaned_data.get("payment_method")
+        payment_reference = (cleaned_data.get("payment_reference") or "").strip()
+        if amount is not None and amount <= 0:
+            self.add_error("amount", "Repayment amount must be greater than zero.")
+        if payment_method == LoanRepayment.PaymentMethod.ONLINE and not payment_reference:
+            self.add_error("payment_reference", "Enter the online reference number or transaction ID.")
+        return cleaned_data
+
+
+class DepositAccountAdminForm(forms.ModelForm):
+    class Meta:
+        model = DepositAccount
+        fields = "__all__"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        deposit_type = cleaned_data.get("deposit_type")
+        principal_amount = cleaned_data.get("principal_amount")
+        installment_amount = cleaned_data.get("installment_amount")
+        tenure_months = cleaned_data.get("tenure_months")
+        if principal_amount is not None and principal_amount < 0:
+            self.add_error("principal_amount", "Principal amount cannot be negative.")
+        if deposit_type == DepositAccount.DepositType.FIXED and principal_amount is not None and principal_amount <= 0:
+            self.add_error("principal_amount", "Fixed deposit amount must be greater than zero.")
+        if deposit_type == DepositAccount.DepositType.RECURRING and installment_amount is not None and installment_amount <= 0:
+            self.add_error("installment_amount", "Recurring deposit installment must be greater than zero.")
+        if tenure_months is not None and tenure_months <= 0:
+            self.add_error("tenure_months", "Tenure must be greater than zero.")
+        return cleaned_data
+
+
+class DepositPaymentAdminForm(forms.ModelForm):
+    class Meta:
+        model = DepositPayment
+        fields = "__all__"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        amount = cleaned_data.get("amount")
+        payment_method = cleaned_data.get("payment_method")
+        payment_reference = (cleaned_data.get("payment_reference") or "").strip()
+        if amount is not None and amount <= 0:
+            self.add_error("amount", "Payment amount must be greater than zero.")
+        if payment_method == DepositPayment.PaymentMethod.ONLINE and not payment_reference:
+            self.add_error("payment_reference", "Enter the online reference number or transaction ID.")
+        return cleaned_data
 
 
 @admin.action(description="Move selected records to Recycle Bin")
@@ -309,13 +438,13 @@ class CustomerAdmin(RecycleAdminMixin, admin.ModelAdmin):
             defaults={
                 "user": user,
                 "username": username,
-                "temporary_password": password,
+                "temporary_password": "",
                 "password_changed_at": None,
             },
         )
         self.message_user(
             request,
-            f"Customer login created. Username: {username} Password: {password}",
+            f"Customer login created. Username: {username} Password: {password}. Copy it now; it is not stored.",
             messages.SUCCESS,
         )
 
@@ -328,20 +457,59 @@ class CustomerAdmin(RecycleAdminMixin, admin.ModelAdmin):
             self.message_user(request, "This customer does not have a login account yet.", messages.ERROR)
             return redirect("admin:myapp_customer_change", customer.pk)
 
+        send_password_sms = request.GET.get("send_sms") == "1"
         if request.method == "POST":
+            send_password_sms = request.POST.get("send_password_sms") == "yes"
             form = SetPasswordForm(customer.user, request.POST)
             if form.is_valid():
+                if send_password_sms:
+                    try:
+                        normalize_nepal_mobile(customer.phone_number)
+                    except ValueError:
+                        form.add_error(
+                            None,
+                            "Cannot send SMS: the customer phone number is not a valid 10-digit Nepal mobile number.",
+                        )
+                    if not settings.SMS_ENABLED or not settings.AAKASHSMS_AUTH_TOKEN:
+                        form.add_error(
+                            None,
+                            "Cannot send SMS: configure AAKASHSMS_AUTH_TOKEN and enable SMS before resetting.",
+                        )
+
+            if form.is_valid():
+                temporary_password = form.cleaned_data["new_password1"]
                 form.save()
-                EBankingCredential.objects.update_or_create(
+                credential, _ = EBankingCredential.objects.update_or_create(
                     customer=customer,
                     defaults={
                         "user": customer.user,
                         "username": customer.user.get_username(),
-                        "temporary_password": form.cleaned_data["new_password1"],
+                        "temporary_password": "",
                         "password_changed_at": None,
                     },
                 )
-                self.message_user(request, "Customer password has been reset.", messages.SUCCESS)
+                if send_password_sms:
+                    delivery = send_temporary_password_sms(credential.pk, temporary_password)
+                    temporary_password = None
+                    if delivery.status == SMSDelivery.Status.QUEUED:
+                        self.message_user(
+                            request,
+                            f"Customer password reset and temporary password queued by AakashSMS for {delivery.recipient}.",
+                            messages.SUCCESS,
+                        )
+                    else:
+                        self.message_user(
+                            request,
+                            "Customer password was reset, but the temporary-password SMS failed. "
+                            f"Reset it again to send a new password. {delivery.last_error}",
+                            messages.ERROR,
+                        )
+                else:
+                    self.message_user(
+                        request,
+                        "Customer password has been reset. The raw password is not stored.",
+                        messages.SUCCESS,
+                    )
                 return redirect("admin:myapp_customer_change", customer.pk)
         else:
             form = SetPasswordForm(customer.user)
@@ -352,6 +520,7 @@ class CustomerAdmin(RecycleAdminMixin, admin.ModelAdmin):
             "opts": self.model._meta,
             "customer": customer,
             "form": form,
+            "send_password_sms": send_password_sms,
         }
         return TemplateResponse(request, "admin/customer_password_reset.html", context)
 
@@ -398,11 +567,10 @@ class CustomerAdmin(RecycleAdminMixin, admin.ModelAdmin):
         if not obj or not obj.user:
             return "A login will be created automatically after saving this customer."
         credential = getattr(obj, "ebanking_credential", None)
-        if credential and credential.temporary_password:
+        if credential and not credential.password_changed_at:
             return format_html(
-                "Username: <strong>{}</strong><br>Password: <strong>{}</strong>",
+                "Username: <strong>{}</strong><br><span class=\"help\">Temporary password has been issued. Raw password is not stored.</span>",
                 credential.username,
-                credential.temporary_password,
             )
         return format_html("Username: <strong>{}</strong>", obj.user.get_username())
 
@@ -424,7 +592,7 @@ class EBankingCredentialAdmin(admin.ModelAdmin):
         "phone_number",
         "email_address",
         "username",
-        "temporary_password_display",
+        "credential_status",
         "password_status",
         "contact_actions",
         "updated_at",
@@ -443,7 +611,7 @@ class EBankingCredentialAdmin(admin.ModelAdmin):
         "phone_number",
         "email_address",
         "username",
-        "temporary_password",
+        "credential_status",
         "password_changed_at",
         "contact_actions",
         "created_at",
@@ -453,10 +621,72 @@ class EBankingCredentialAdmin(admin.ModelAdmin):
     fieldsets = (
         ("Customer", {"fields": ("customer_link", "customer", "user")}),
         ("Contact", {"fields": ("phone_number", "email_address", "contact_actions")}),
-        ("Login", {"fields": ("username", "temporary_password", "password_changed_at")}),
+        ("Login", {"fields": ("username", "credential_status", "password_changed_at")}),
         ("Timestamps", {"fields": ("created_at", "updated_at")}),
     )
     list_per_page = 25
+
+    def get_urls(self):
+        custom_urls = [
+            path(
+                "<int:credential_id>/send-sms/",
+                self.admin_site.admin_view(self.send_sms_view),
+                name="myapp_ebankingcredential_send_sms",
+            ),
+        ]
+        return custom_urls + super().get_urls()
+
+    def send_sms_view(self, request, credential_id):
+        if not request.user.has_perm("myapp.change_ebankingcredential"):
+            raise PermissionDenied
+
+        credential = get_object_or_404(
+            EBankingCredential.objects.select_related("customer"),
+            pk=credential_id,
+        )
+        raw_phone_number = credential.customer.phone_number
+        phone_error = ""
+        try:
+            normalized_phone = normalize_nepal_mobile(raw_phone_number)
+        except ValueError:
+            normalized_phone = raw_phone_number or "Not provided"
+            phone_error = "Sorry, this customer phone number is incorrect or is not a valid Nepal mobile number."
+
+        if request.method == "POST":
+            if phone_error:
+                messages.error(request, phone_error)
+                return redirect("admin:myapp_ebankingcredential_changelist")
+            if request.POST.get("confirm_send") != "yes":
+                messages.warning(request, "SMS sending was cancelled.")
+                return redirect("admin:myapp_ebankingcredential_changelist")
+
+            delivery = send_ebanking_login_sms(credential.pk)
+            if delivery.status == SMSDelivery.Status.QUEUED:
+                provider_reference = f" Reference: {delivery.provider_reference}." if delivery.provider_reference else ""
+                messages.success(
+                    request,
+                    f"SMS queued by AakashSMS for {delivery.recipient}.{provider_reference}",
+                )
+            elif delivery.status == SMSDelivery.Status.FAILED:
+                messages.error(
+                    request,
+                    f"Sorry, SMS could not be sent to {normalized_phone}. {delivery.last_error}",
+                )
+            else:
+                messages.warning(request, f"SMS was not sent. {delivery.last_error}")
+            return redirect("admin:myapp_ebankingcredential_changelist")
+
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Confirm E-Banking SMS",
+            "opts": self.model._meta,
+            "credential": credential,
+            "phone_number": normalized_phone,
+            "phone_error": phone_error,
+            "sms_message": build_ebanking_login_message(credential),
+            "changelist_url": reverse("admin:myapp_ebankingcredential_changelist"),
+        }
+        return TemplateResponse(request, "admin/ebanking_sms_confirmation.html", context)
 
     def has_add_permission(self, request):
         return False
@@ -475,10 +705,12 @@ class EBankingCredentialAdmin(admin.ModelAdmin):
 
     customer_link.short_description = "Customer profile"
 
-    def temporary_password_display(self, obj):
-        return obj.temporary_password or "Changed by customer"
+    def credential_status(self, obj):
+        if obj.password_changed_at:
+            return "Password changed by customer"
+        return "Temporary password issued; raw password is not stored"
 
-    temporary_password_display.short_description = "Password"
+    credential_status.short_description = "Credential"
 
     def phone_number(self, obj):
         return obj.customer.phone_number or "-"
@@ -495,7 +727,7 @@ class EBankingCredentialAdmin(admin.ModelAdmin):
         customer = obj.customer
         message = (
             f"Nanu Investment E-Banking login. "
-            f"Username: {obj.username} Password: {obj.temporary_password or '[changed by customer]'}"
+            f"Username: {obj.username}. Password was provided separately by admin and is not stored."
         )
         encoded_subject = quote("Nanu Investment E-Banking Login")
         encoded_message = quote(message)
@@ -509,11 +741,18 @@ class EBankingCredentialAdmin(admin.ModelAdmin):
                 )
             )
         if customer.phone_number:
+            send_sms_url = reverse("admin:myapp_ebankingcredential_send_sms", args=(obj.pk,))
+            reset_password_url = reverse("admin:myapp_customer_reset_password", args=(customer.pk,))
             actions.append(
                 format_html(
-                    '<a class="button ebanking-contact-button" href="sms:{}?body={}">Send SMS</a>',
-                    customer.phone_number,
-                    encoded_message,
+                    '<a class="button ebanking-contact-button" href="{}">Send SMS</a>',
+                    send_sms_url,
+                )
+            )
+            actions.append(
+                format_html(
+                    '<a class="button ebanking-contact-button" href="{}?send_sms=1">Reset &amp; SMS Password</a>',
+                    reset_password_url,
                 )
             )
             actions.append(
@@ -569,7 +808,9 @@ def sync_collection_transaction(collection):
             "customer": collection.customer,
             "amount": collection.amount,
             "balance_after": balance_after,
-            "payment_method": "Cash",
+            "payment_method": collection.get_payment_method_display(),
+            "payment_reference": collection.payment_reference,
+            "payment_receipt": collection.payment_receipt,
             "status": Transaction.Status.COMPLETED,
             "visit_type": collection.visit_type,
             "collected_by": collection.collected_by,
@@ -603,6 +844,8 @@ def build_receipt_image(transaction_obj):
         raise RuntimeError("Pillow is required to generate PDF/JPG bills. Install it with: python -m pip install Pillow==11.3.0") from exc
 
     customer = transaction_obj.customer
+    system_setting = SystemSetting.get_solo()
+    currency_label = system_setting.currency_label or "Rs"
     width, height = 1240, 1754
     image = Image.new("RGB", (width, height), "#f3f7f6")
     draw = ImageDraw.Draw(image)
@@ -624,7 +867,7 @@ def build_receipt_image(transaction_obj):
     x0, y0, x1, y1 = 70, 70, width - 70, height - 70
     draw.rounded_rectangle((x0, y0, x1, y1), radius=22, fill="white", outline=line, width=2)
     draw.rectangle((x0, y0, x1, y0 + 150), fill=nav)
-    draw.text((105, 105), "Nanu Investment", fill="white", font=title_font)
+    draw.text((105, 105), system_setting.company_name, fill="white", font=title_font)
     draw.text((108, 170), "Collection Transaction Bill", fill="#dfece9", font=subtitle_font)
     draw.rounded_rectangle((820, 110, 1135, 205), radius=14, fill="white")
     draw.text((850, 128), "RECEIPT NO.", fill=muted, font=small_font)
@@ -640,6 +883,8 @@ def build_receipt_image(transaction_obj):
         ("Payment Method", transaction_obj.payment_method),
         ("Collection Location", transaction_obj.get_visit_type_display()),
     ]
+    if transaction_obj.payment_reference:
+        summary.append(("Reference ID", transaction_obj.payment_reference))
     for index, (label, value) in enumerate(summary):
         left = 88 if index % 2 == 0 else 620
         top = y + (index // 2) * 92
@@ -674,17 +919,17 @@ def build_receipt_image(transaction_obj):
     y = 890
     draw.rounded_rectangle((88, y, 1152, y + 240), radius=16, fill="#f8fbfa", outline=line, width=2)
     draw.text((126, y + 36), "Collected Amount", fill=muted, font=label_font)
-    draw.text((126, y + 78), f"Rs {transaction_obj.amount:.2f}", fill=accent, font=amount_font)
+    draw.text((126, y + 78), f"{currency_label} {transaction_obj.amount:.2f}", fill=accent, font=amount_font)
     draw.line((126, y + 136, 1114, y + 136), fill=line, width=2)
     draw.text((126, y + 164), "Total Balance After Transaction", fill=muted, font=label_font)
-    draw.text((715, y + 156), f"Rs {transaction_obj.balance_after:.2f}", fill=nav, font=amount_font)
+    draw.text((715, y + 156), f"{currency_label} {transaction_obj.balance_after:.2f}", fill=nav, font=amount_font)
 
     y = 1240
     draw.line((120, y, 480, y), fill=nav, width=2)
-    draw.text((190, y + 18), "Customer Signature", fill=text, font=label_font)
+    draw.text((190, y + 18), system_setting.customer_signature_label, fill=text, font=label_font)
     draw.line((760, y, 1120, y), fill=nav, width=2)
-    draw.text((820, y + 18), "Authorized Signature", fill=text, font=label_font)
-    draw.text((88, 1595), "This bill was generated by Nanu Investment transaction system.", fill=muted, font=small_font)
+    draw.text((820, y + 18), system_setting.authorized_signature_label, fill=text, font=label_font)
+    draw.text((88, 1595), system_setting.receipt_footer_text, fill=muted, font=small_font)
     draw.text((88, 1628), "Please keep this receipt for your records.", fill=muted, font=small_font)
     return image
 
@@ -759,14 +1004,22 @@ class DailyCollectionAdmin(admin.ModelAdmin):
 
         customer = get_object_or_404(Customer, pk=customer_id)
         if request.method == "POST":
-            form = DailyCollectionEntryForm(request.POST)
+            form = DailyCollectionEntryForm(request.POST, request.FILES)
             if form.is_valid():
                 collection = form.save(commit=False)
                 collection.customer = customer
                 collection.collected_by = request.user
-                collection.collected_at = timezone.now()
+                collected_at, is_manual_datetime = form.get_collection_datetime()
+                collection.collected_at = collected_at
+                mark_collection_datetime_status(collection, is_manual_datetime)
                 collection.save()
                 transaction_obj = sync_collection_transaction(collection)
+                if is_manual_datetime:
+                    self.message_user(
+                        request,
+                        "Manual collection date/time saved and sent to Approvals. Collection is counted normally.",
+                        messages.WARNING,
+                    )
                 self.message_user(
                     request,
                     f"Rs {collection.amount:.2f} collected for {customer.full_name}. Transaction {transaction_obj.transaction_id} generated.",
@@ -825,15 +1078,46 @@ class DailyCollectionAdmin(admin.ModelAdmin):
 
 @admin.register(CollectionRecord)
 class CollectionRecordAdmin(RecycleAdminMixin, admin.ModelAdmin):
-    list_display = ("customer", "amount", "visit_type", "collected_by", "collected_at", "transaction_link", "note")
-    list_filter = ("visit_type", "collected_by", "collected_at")
-    search_fields = ("customer__first_name", "customer__last_name", "customer__customer_id", "note")
-    autocomplete_fields = ("customer", "collected_by")
+    form = CollectionRecordAdminForm
+    list_display = (
+        "customer",
+        "amount",
+        "payment_method",
+        "payment_reference",
+        "visit_type",
+        "collected_by",
+        "collected_at",
+        "datetime_approval_badge",
+        "transaction_link",
+        "note",
+    )
+    list_filter = ("payment_method", "visit_type", "collected_by", "datetime_approval_status", "collected_at")
+    search_fields = ("customer__first_name", "customer__last_name", "customer__customer_id", "payment_reference", "note")
+    autocomplete_fields = ("customer",)
+    readonly_fields = (
+        "payment_receipt_link",
+        "datetime_approval_status",
+        "datetime_approval_requested_at",
+        "datetime_approved_at",
+        "datetime_approved_by",
+    )
     date_hierarchy = "collected_at"
     ordering = ("-collected_at",)
     list_per_page = 25
     fieldsets = (
-        ("Collection", {"fields": ("customer", "amount", "visit_type", "collected_by", "collected_at")}),
+        ("Collection", {"fields": ("customer", "amount", "visit_type", "collected_at")}),
+        ("Payment", {"fields": ("payment_method", "payment_reference", "payment_receipt", "payment_receipt_link")}),
+        (
+            "Date/Time Approval",
+            {
+                "fields": (
+                    "datetime_approval_status",
+                    "datetime_approval_requested_at",
+                    "datetime_approved_at",
+                    "datetime_approved_by",
+                )
+            },
+        ),
         ("Visit Note", {"fields": ("note",)}),
     )
 
@@ -843,8 +1127,22 @@ class CollectionRecordAdmin(RecycleAdminMixin, admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         if not obj.collected_by_id:
             obj.collected_by = request.user
+        if not obj.collected_at:
+            obj.collected_at = timezone.now()
+            mark_collection_datetime_status(obj, False)
+        elif form.did_manual_collected_at_change():
+            mark_collection_datetime_status(obj, True)
+        elif not change and not obj.collected_at_was_manual:
+            mark_collection_datetime_status(obj, False)
         super().save_model(request, obj, form, change)
         sync_collection_transaction(obj)
+
+        if obj.datetime_approval_status == CollectionRecord.DateTimeApprovalStatus.PENDING:
+            self.message_user(
+                request,
+                "Manual collection date/time saved and sent to Approvals. Collection is counted normally.",
+                messages.WARNING,
+            )
 
     def transaction_link(self, obj):
         transaction_obj = getattr(obj, "transaction", None)
@@ -854,6 +1152,386 @@ class CollectionRecordAdmin(RecycleAdminMixin, admin.ModelAdmin):
         return format_html('<a class="button" href="{}">Receipt</a>', url)
 
     transaction_link.short_description = "Transaction"
+
+    def payment_receipt_link(self, obj):
+        if not obj or not obj.payment_receipt:
+            return "-"
+        return format_html('<a class="button" href="{}" target="_blank">View Receipt</a>', obj.payment_receipt.url)
+
+    payment_receipt_link.short_description = "Uploaded payment receipt"
+
+    def datetime_approval_badge(self, obj):
+        status_classes = {
+            CollectionRecord.DateTimeApprovalStatus.NOT_REQUIRED: "status-active",
+            CollectionRecord.DateTimeApprovalStatus.PENDING: "status-pending",
+            CollectionRecord.DateTimeApprovalStatus.APPROVED: "status-active",
+            CollectionRecord.DateTimeApprovalStatus.REJECTED: "status-hidden",
+        }
+        return format_html(
+            '<span class="admin-status {}">{}</span>',
+            status_classes.get(obj.datetime_approval_status, "status-pending"),
+            obj.get_datetime_approval_status_display(),
+        )
+
+    datetime_approval_badge.short_description = "Date/Time Approval"
+
+
+@admin.action(description="Send selected loan applications for approval")
+def send_loans_for_approval(modeladmin, request, queryset):
+    updated = queryset.exclude(status=LoanApplication.Status.APPROVED).update(status=LoanApplication.Status.PENDING)
+    modeladmin.message_user(request, f"{updated} loan application(s) sent for approval.", messages.SUCCESS)
+
+
+@admin.action(description="Approve selected loan applications")
+def approve_loans(modeladmin, request, queryset):
+    approved_count = 0
+    for loan in queryset.exclude(status=LoanApplication.Status.APPROVED):
+        loan.status = LoanApplication.Status.APPROVED
+        loan.approved_amount = loan.approved_amount or loan.requested_amount
+        loan.approved_at = timezone.now()
+        loan.approved_by = request.user
+        loan.save(update_fields=("status", "approved_amount", "approved_at", "approved_by", "updated_at"))
+        approved_count += 1
+    modeladmin.message_user(request, f"{approved_count} loan application(s) approved.", messages.SUCCESS)
+
+
+@admin.register(LoanApplication)
+class LoanApplicationAdmin(RecycleAdminMixin, admin.ModelAdmin):
+    form = LoanApplicationAdminForm
+    list_display = (
+        "customer",
+        "requested_amount",
+        "approved_amount",
+        "interest_rate",
+        "duration_months",
+        "outstanding_display",
+        "status_badge",
+        "first_due_date",
+        "submitted_at",
+    )
+    list_filter = ("status", "interest_rate", "duration_months", "first_due_date", "submitted_at")
+    search_fields = (
+        "customer__first_name",
+        "customer__last_name",
+        "customer__customer_id",
+        "customer__phone_number",
+        "purpose",
+        "remarks",
+    )
+    autocomplete_fields = ("customer",)
+    readonly_fields = ("submitted_at", "approved_at", "approved_by", "outstanding_display", "paid_display")
+    fieldsets = (
+        ("Customer", {"fields": ("customer",)}),
+        ("Loan Request", {"fields": ("requested_amount", "purpose", "collateral_details")}),
+        ("Terms", {"fields": ("approved_amount", "interest_rate", "duration_months", "first_due_date", "disbursed_at")}),
+        ("Approval", {"fields": ("status", "submitted_at", "approved_at", "approved_by", "remarks")}),
+        ("Balance", {"fields": ("paid_display", "outstanding_display")}),
+    )
+    actions = (send_loans_for_approval, approve_loans)
+    ordering = ("-submitted_at", "-id")
+    list_per_page = 25
+
+    def save_model(self, request, obj, form, change):
+        if obj.status == LoanApplication.Status.APPROVED and not obj.approved_by_id:
+            obj.approved_by = request.user
+            obj.approved_at = timezone.now()
+        super().save_model(request, obj, form, change)
+
+    def status_badge(self, obj):
+        class_name = {
+            LoanApplication.Status.APPROVED: "status-active",
+            LoanApplication.Status.CLOSED: "status-active",
+            LoanApplication.Status.REJECTED: "status-hidden",
+        }.get(obj.status, "status-pending")
+        return format_html('<span class="admin-status {}">{}</span>', class_name, obj.get_status_display())
+
+    status_badge.short_description = "Status"
+
+    def outstanding_display(self, obj):
+        return f"Rs {obj.outstanding_amount:.2f}"
+
+    outstanding_display.short_description = "Outstanding"
+
+    def paid_display(self, obj):
+        return f"Rs {obj.paid_amount:.2f}"
+
+    paid_display.short_description = "Paid"
+
+
+@admin.register(LoanRepayment)
+class LoanRepaymentAdmin(RecycleAdminMixin, admin.ModelAdmin):
+    form = LoanRepaymentAdminForm
+    list_display = ("loan", "customer_display", "amount", "payment_method", "payment_reference", "collected_by", "paid_at", "receipt_link")
+    list_filter = ("payment_method", "collected_by", "paid_at")
+    search_fields = (
+        "loan__customer__first_name",
+        "loan__customer__last_name",
+        "loan__customer__customer_id",
+        "payment_reference",
+        "note",
+    )
+    autocomplete_fields = ("loan",)
+    readonly_fields = ("receipt_link",)
+    fieldsets = (
+        ("Loan", {"fields": ("loan", "amount")}),
+        ("Payment", {"fields": ("payment_method", "payment_reference", "payment_receipt", "receipt_link")}),
+        ("Collection", {"fields": ("paid_at", "note")}),
+    )
+    date_hierarchy = "paid_at"
+    ordering = ("-paid_at", "-id")
+    list_per_page = 25
+
+    def save_model(self, request, obj, form, change):
+        if not obj.collected_by_id:
+            obj.collected_by = request.user
+        super().save_model(request, obj, form, change)
+        loan = obj.loan
+        if loan.outstanding_amount <= 0 and loan.status == LoanApplication.Status.APPROVED:
+            loan.status = LoanApplication.Status.CLOSED
+            loan.save(update_fields=("status", "updated_at"))
+
+    def customer_display(self, obj):
+        return obj.loan.customer
+
+    customer_display.short_description = "Customer"
+
+    def receipt_link(self, obj):
+        if not obj or not obj.payment_receipt:
+            return "-"
+        return format_html('<a class="button" href="{}" target="_blank">View Receipt</a>', obj.payment_receipt.url)
+
+    receipt_link.short_description = "Receipt"
+
+
+@admin.action(description="Approve selected deposit accounts")
+def approve_deposits(modeladmin, request, queryset):
+    approved_count = 0
+    for deposit in queryset.exclude(status=DepositAccount.Status.ACTIVE):
+        deposit.status = DepositAccount.Status.ACTIVE
+        deposit.approved_at = timezone.now()
+        deposit.approved_by = request.user
+        deposit.save(update_fields=("status", "approved_at", "approved_by", "updated_at"))
+        approved_count += 1
+    modeladmin.message_user(request, f"{approved_count} deposit account(s) approved.", messages.SUCCESS)
+
+
+@admin.register(DepositAccount)
+class DepositAccountAdmin(RecycleAdminMixin, admin.ModelAdmin):
+    form = DepositAccountAdminForm
+    list_display = (
+        "customer",
+        "deposit_type",
+        "principal_amount",
+        "installment_amount",
+        "interest_rate",
+        "tenure_months",
+        "maturity_date",
+        "maturity_amount_display",
+        "status_badge",
+    )
+    list_filter = ("deposit_type", "status", "interest_payout", "maturity_date", "next_due_date")
+    search_fields = (
+        "customer__first_name",
+        "customer__last_name",
+        "customer__customer_id",
+        "customer__phone_number",
+        "nominee_name",
+        "remarks",
+    )
+    autocomplete_fields = ("customer",)
+    readonly_fields = ("approved_at", "approved_by", "closed_at", "total_paid_display", "maturity_amount_display", "certificate_link")
+    fieldsets = (
+        ("Customer", {"fields": ("customer", "deposit_type", "status")}),
+        ("Deposit Terms", {"fields": ("principal_amount", "installment_amount", "interest_rate", "tenure_months", "interest_payout")}),
+        ("Dates", {"fields": ("start_date", "maturity_date", "next_due_date")}),
+        ("Nominee", {"fields": ("nominee_name", "nominee_phone")}),
+        ("Certificate", {"fields": ("certificate_file", "certificate_link")}),
+        ("Approval / Closure", {"fields": ("approved_at", "approved_by", "closed_at", "closure_reason", "remarks")}),
+        ("Summary", {"fields": ("total_paid_display", "maturity_amount_display")}),
+    )
+    actions = (approve_deposits,)
+    ordering = ("-created_at", "-id")
+    list_per_page = 25
+
+    def save_model(self, request, obj, form, change):
+        if obj.status == DepositAccount.Status.ACTIVE and not obj.approved_by_id:
+            obj.approved_by = request.user
+            obj.approved_at = timezone.now()
+        if obj.status in (DepositAccount.Status.CLOSED, DepositAccount.Status.CANCELLED) and not obj.closed_at:
+            obj.closed_at = timezone.now()
+        if obj.status == DepositAccount.Status.ACTIVE and obj.maturity_date and obj.maturity_date <= timezone.localdate():
+            obj.status = DepositAccount.Status.MATURED
+        super().save_model(request, obj, form, change)
+
+    def status_badge(self, obj):
+        class_name = {
+            DepositAccount.Status.ACTIVE: "status-active",
+            DepositAccount.Status.MATURED: "status-active",
+            DepositAccount.Status.CLOSED: "status-active",
+            DepositAccount.Status.REJECTED: "status-hidden",
+            DepositAccount.Status.CANCELLED: "status-hidden",
+        }.get(obj.status, "status-pending")
+        return format_html('<span class="admin-status {}">{}</span>', class_name, obj.get_status_display())
+
+    status_badge.short_description = "Status"
+
+    def total_paid_display(self, obj):
+        return f"Rs {obj.total_paid:.2f}"
+
+    total_paid_display.short_description = "Total paid"
+
+    def maturity_amount_display(self, obj):
+        return f"Rs {obj.maturity_amount:.2f}"
+
+    maturity_amount_display.short_description = "Maturity amount"
+
+    def certificate_link(self, obj):
+        if not obj or not obj.certificate_file:
+            return "-"
+        return format_html('<a class="button" href="{}" target="_blank">View Certificate</a>', obj.certificate_file.url)
+
+    certificate_link.short_description = "Certificate"
+
+
+@admin.register(DepositPayment)
+class DepositPaymentAdmin(RecycleAdminMixin, admin.ModelAdmin):
+    form = DepositPaymentAdminForm
+    list_display = ("deposit", "customer_display", "amount", "payment_method", "payment_reference", "collected_by", "paid_at", "receipt_link")
+    list_filter = ("payment_method", "collected_by", "paid_at")
+    search_fields = (
+        "deposit__customer__first_name",
+        "deposit__customer__last_name",
+        "deposit__customer__customer_id",
+        "payment_reference",
+        "note",
+    )
+    autocomplete_fields = ("deposit",)
+    readonly_fields = ("receipt_link",)
+    fieldsets = (
+        ("Deposit", {"fields": ("deposit", "amount")}),
+        ("Payment", {"fields": ("payment_method", "payment_reference", "payment_receipt", "receipt_link")}),
+        ("Collection", {"fields": ("paid_at", "note")}),
+    )
+    date_hierarchy = "paid_at"
+    ordering = ("-paid_at", "-id")
+    list_per_page = 25
+
+    def save_model(self, request, obj, form, change):
+        if not obj.collected_by_id:
+            obj.collected_by = request.user
+        super().save_model(request, obj, form, change)
+
+    def customer_display(self, obj):
+        return obj.deposit.customer
+
+    customer_display.short_description = "Customer"
+
+    def receipt_link(self, obj):
+        if not obj or not obj.payment_receipt:
+            return "-"
+        return format_html('<a class="button" href="{}" target="_blank">View Receipt</a>', obj.payment_receipt.url)
+
+    receipt_link.short_description = "Receipt"
+
+
+@admin.action(description="Retry selected failed or skipped SMS messages")
+def retry_sms_messages(modeladmin, request, queryset):
+    queued_count = 0
+    failed_count = 0
+    skipped_count = 0
+    retryable = queryset.filter(
+        status__in=(SMSDelivery.Status.FAILED, SMSDelivery.Status.SKIPPED)
+    )
+    for delivery in retryable:
+        result = attempt_sms_delivery(delivery)
+        if result.status == SMSDelivery.Status.QUEUED:
+            queued_count += 1
+        elif result.status == SMSDelivery.Status.FAILED:
+            failed_count += 1
+        else:
+            skipped_count += 1
+
+    modeladmin.message_user(
+        request,
+        f"SMS retry finished: {queued_count} queued, {failed_count} failed, {skipped_count} skipped.",
+        messages.SUCCESS if queued_count and not failed_count else messages.WARNING,
+    )
+
+
+@admin.register(SMSDelivery)
+class SMSDeliveryAdmin(admin.ModelAdmin):
+    list_display = (
+        "created_at",
+        "transaction_reference",
+        "customer",
+        "recipient",
+        "event_type",
+        "status_badge",
+        "attempt_count",
+        "provider_reference",
+    )
+    list_filter = ("status", "event_type", "provider", "created_at")
+    search_fields = (
+        "recipient",
+        "transaction__transaction_id",
+        "customer__customer_id",
+        "customer__first_name",
+        "customer__last_name",
+        "provider_reference",
+        "message",
+        "last_error",
+    )
+    readonly_fields = (
+        "transaction",
+        "customer",
+        "event_type",
+        "provider",
+        "recipient",
+        "message",
+        "status",
+        "provider_reference",
+        "provider_response",
+        "attempt_count",
+        "last_error",
+        "last_attempt_at",
+        "queued_at",
+        "created_at",
+        "updated_at",
+    )
+    fields = readonly_fields
+    actions = (retry_sms_messages,)
+    ordering = ("-created_at",)
+    list_per_page = 40
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("transaction", "customer")
+
+    @admin.display(description="Transaction", ordering="transaction__transaction_id")
+    def transaction_reference(self, obj):
+        if not obj.transaction_id:
+            return "-"
+        url = reverse("admin:myapp_transaction_receipt", args=(obj.transaction_id,))
+        return format_html('<a href="{}">{}</a>', url, obj.transaction.transaction_id)
+
+    @admin.display(description="Status", ordering="status")
+    def status_badge(self, obj):
+        status_classes = {
+            SMSDelivery.Status.QUEUED: "status-active",
+            SMSDelivery.Status.FAILED: "status-hidden",
+            SMSDelivery.Status.SKIPPED: "status-pending",
+            SMSDelivery.Status.PENDING: "status-pending",
+        }
+        return format_html(
+            '<span class="admin-status {}">{}</span>',
+            status_classes.get(obj.status, "status-pending"),
+            obj.get_status_display(),
+        )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Transaction)
@@ -865,6 +1543,7 @@ class TransactionAdmin(RecycleAdminMixin, admin.ModelAdmin):
         "balance_after",
         "status",
         "payment_method",
+        "payment_reference",
         "collected_by",
         "transacted_at",
         "receipt_actions",
@@ -887,6 +1566,9 @@ class TransactionAdmin(RecycleAdminMixin, admin.ModelAdmin):
         "balance_after",
         "status",
         "payment_method",
+        "payment_reference",
+        "payment_receipt",
+        "payment_receipt_link",
         "visit_type",
         "collected_by",
         "note",
@@ -898,6 +1580,13 @@ class TransactionAdmin(RecycleAdminMixin, admin.ModelAdmin):
     date_hierarchy = "transacted_at"
     ordering = ("-transacted_at", "-id")
     list_per_page = 30
+
+    def payment_receipt_link(self, obj):
+        if not obj or not obj.payment_receipt:
+            return "-"
+        return format_html('<a class="button" href="{}" target="_blank">View Receipt</a>', obj.payment_receipt.url)
+
+    payment_receipt_link.short_description = "Uploaded payment receipt"
 
     def get_urls(self):
         custom_urls = [
@@ -950,6 +1639,7 @@ class TransactionAdmin(RecycleAdminMixin, admin.ModelAdmin):
             **self.admin_site.each_context(request),
             "title": f"Receipt {transaction_obj.transaction_id}",
             "transaction": transaction_obj,
+            "system_setting": SystemSetting.get_solo(),
         }
         return TemplateResponse(request, "admin/transaction_receipt.html", context)
 
@@ -1271,6 +1961,139 @@ class RecycleBinAdmin(admin.ModelAdmin):
         return False
 
 
+@admin.register(SecurityEvent)
+class SecurityEventAdmin(admin.ModelAdmin):
+    list_display = ("event_type", "username", "user", "ip_address", "path", "created_at")
+    list_filter = ("event_type", "created_at")
+    search_fields = ("username", "user__username", "ip_address", "path", "message")
+    readonly_fields = ("event_type", "user", "username", "ip_address", "user_agent", "path", "message", "created_at")
+    fields = readonly_fields
+    ordering = ("-created_at",)
+    list_per_page = 50
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+
+@admin.register(SystemSetting)
+class SystemSettingAdmin(admin.ModelAdmin):
+    fieldsets = (
+        (
+            "Company Profile",
+            {
+                "fields": (
+                    "company_name",
+                    "company_address",
+                    "company_phone",
+                    "company_email",
+                    "pan_vat_number",
+                    "company_logo",
+                    "favicon",
+                )
+            },
+        ),
+        (
+            "Receipt & Bill Settings",
+            {
+                "fields": (
+                    "receipt_prefix",
+                    "date_format",
+                    "currency_label",
+                    "customer_signature_label",
+                    "authorized_signature_label",
+                    "default_payment_method",
+                    "receipt_footer_text",
+                )
+            },
+        ),
+        (
+            "Finance Defaults",
+            {
+                "fields": (
+                    "default_saving_interest_rate",
+                    "default_loan_interest_rate",
+                    "default_fixed_deposit_rate",
+                    "default_recurring_deposit_rate",
+                    "penalty_rate",
+                    "grace_period_days",
+                )
+            },
+        ),
+        (
+            "Approval Rules",
+            {
+                "fields": (
+                    "require_manual_collection_datetime_approval",
+                    "require_loan_approval",
+                    "require_deposit_approval",
+                    "approval_threshold_amount",
+                )
+            },
+        ),
+        (
+            "Security Settings",
+            {
+                "fields": (
+                    "failed_login_alert_threshold",
+                    "session_timeout_minutes",
+                    "password_policy_note",
+                    "allow_staff_profile_uploads",
+                )
+            },
+        ),
+        (
+            "Notification Settings",
+            {
+                "fields": (
+                    "sms_sender_name",
+                    "email_sender",
+                    "whatsapp_template",
+                    "sms_receipt_template",
+                    "email_receipt_template",
+                )
+            },
+        ),
+        (
+            "Backup & Maintenance",
+            {
+                "fields": (
+                    "maintenance_mode",
+                    "backup_note",
+                    "last_backup_at",
+                    "updated_at",
+                    "updated_by",
+                )
+            },
+        ),
+    )
+    readonly_fields = ("updated_at", "updated_by")
+
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser and not SystemSetting.objects.exists()
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def save_model(self, request, obj, form, change):
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
+
+
 def admin_reports_view(request):
     from .templatetags.admin_metrics import get_admin_metrics
 
@@ -1321,6 +2144,61 @@ def admin_accounting_view(request):
     return TemplateResponse(request, "admin/accounting.html", context)
 
 
+def admin_calculator_view(request):
+    context = {
+        **admin.site.each_context(request),
+        "title": "Calculator",
+    }
+    return TemplateResponse(request, "admin/calculator.html", context)
+
+
+def admin_audit_security_view(request):
+    UserModel = get_user_model()
+    recent_admin_logs = LogEntry.objects.select_related("content_type", "user").order_by("-action_time")[:20]
+    security_events = SecurityEvent.objects.select_related("user")[:20]
+    staff_users = (
+        UserModel.objects.filter(is_staff=True)
+        .prefetch_related("groups", "user_permissions")
+        .order_by("username")
+    )
+    active_sessions = Session.objects.filter(expire_date__gte=timezone.now()).count()
+    pending_approval_count = (
+        Customer.objects.filter(kyc_status=Customer.KycStatus.PENDING).count()
+        + Ticket.objects.filter(status=Ticket.Status.STAFF_COMPLETED).count()
+        + CollectionRecord.objects.filter(
+            datetime_approval_status=CollectionRecord.DateTimeApprovalStatus.PENDING,
+            is_deleted=False,
+        ).count()
+        + LoanApplication.objects.filter(status=LoanApplication.Status.PENDING, is_deleted=False).count()
+        + DepositAccount.objects.filter(status=DepositAccount.Status.PENDING, is_deleted=False).count()
+    )
+    failed_logins_today = SecurityEvent.objects.filter(
+        event_type=SecurityEvent.EventType.LOGIN_FAILED,
+        created_at__date=timezone.localdate(),
+    ).count()
+    context = {
+        **admin.site.each_context(request),
+        "title": "Audit & Security",
+        "recent_admin_logs": recent_admin_logs,
+        "security_events": security_events,
+        "staff_users": staff_users,
+        "active_sessions": active_sessions,
+        "pending_approval_count": pending_approval_count,
+        "failed_logins_today": failed_logins_today,
+        "debug_enabled": getattr(settings, "DEBUG", False),
+        "timezone_name": getattr(settings, "TIME_ZONE", "-"),
+        "language_code": getattr(settings, "LANGUAGE_CODE", "-"),
+    }
+    return TemplateResponse(request, "admin/audit_security.html", context)
+
+
+def admin_system_settings_redirect(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    setting = SystemSetting.get_solo()
+    return redirect("admin:myapp_systemsetting_change", object_id=setting.pk)
+
+
 def admin_approvals_view(request):
     if request.method == "POST":
         action = request.POST.get("action")
@@ -1363,16 +2241,107 @@ def admin_approvals_view(request):
             messages.success(request, message)
             return redirect("admin:myapp_approvals")
 
+        if action in {"approve_collection_datetime", "reject_collection_datetime"}:
+            collection = get_object_or_404(CollectionRecord, pk=object_id)
+            if not request.user.has_perm("myapp.change_collectionrecord"):
+                raise PermissionDenied
+            if collection.datetime_approval_status != CollectionRecord.DateTimeApprovalStatus.PENDING:
+                messages.warning(request, "This collection date/time is no longer waiting for approval.")
+                return redirect("admin:myapp_approvals")
+            if action == "approve_collection_datetime":
+                collection.datetime_approval_status = CollectionRecord.DateTimeApprovalStatus.APPROVED
+                collection.datetime_approved_at = timezone.now()
+                collection.datetime_approved_by = request.user
+                message = f"Collection date/time approved for {collection.customer.full_name}."
+            else:
+                collection.datetime_approval_status = CollectionRecord.DateTimeApprovalStatus.REJECTED
+                collection.datetime_approved_at = timezone.now()
+                collection.datetime_approved_by = request.user
+                message = f"Collection date/time rejected for {collection.customer.full_name}."
+            collection.save(
+                update_fields=(
+                    "datetime_approval_status",
+                    "datetime_approved_at",
+                    "datetime_approved_by",
+                )
+            )
+            messages.success(request, message)
+            return redirect("admin:myapp_approvals")
+
+        if action in {"approve_loan", "reject_loan"}:
+            loan = get_object_or_404(LoanApplication, pk=object_id)
+            if not request.user.has_perm("myapp.change_loanapplication"):
+                raise PermissionDenied
+            if loan.status != LoanApplication.Status.PENDING:
+                messages.warning(request, "This loan application is no longer waiting for approval.")
+                return redirect("admin:myapp_approvals")
+            if action == "approve_loan":
+                loan.status = LoanApplication.Status.APPROVED
+                loan.approved_amount = loan.approved_amount or loan.requested_amount
+                loan.approved_at = timezone.now()
+                loan.approved_by = request.user
+                message = f"Loan approved for {loan.customer.full_name}."
+            else:
+                loan.status = LoanApplication.Status.REJECTED
+                loan.approved_at = None
+                loan.approved_by = None
+                message = f"Loan rejected for {loan.customer.full_name}."
+            loan.save(update_fields=("status", "approved_amount", "approved_at", "approved_by", "updated_at"))
+            messages.success(request, message)
+            return redirect("admin:myapp_approvals")
+
+        if action in {"approve_deposit", "reject_deposit"}:
+            deposit = get_object_or_404(DepositAccount, pk=object_id)
+            if not request.user.has_perm("myapp.change_depositaccount"):
+                raise PermissionDenied
+            if deposit.status != DepositAccount.Status.PENDING:
+                messages.warning(request, "This deposit account is no longer waiting for approval.")
+                return redirect("admin:myapp_approvals")
+            if action == "approve_deposit":
+                deposit.status = DepositAccount.Status.ACTIVE
+                deposit.approved_at = timezone.now()
+                deposit.approved_by = request.user
+                message = f"Deposit account approved for {deposit.customer.full_name}."
+            else:
+                deposit.status = DepositAccount.Status.REJECTED
+                deposit.approved_at = None
+                deposit.approved_by = None
+                message = f"Deposit account rejected for {deposit.customer.full_name}."
+            deposit.save(update_fields=("status", "approved_at", "approved_by", "updated_at"))
+            messages.success(request, message)
+            return redirect("admin:myapp_approvals")
+
     pending_kyc = Customer.objects.filter(kyc_status=Customer.KycStatus.PENDING).order_by("-submitted_for_approval_at", "-created_at")
     pending_tickets = Ticket.objects.select_related("customer", "created_by", "assigned_to").filter(
         status=Ticket.Status.STAFF_COMPLETED,
     ).order_by("-staff_completed_at", "-created_at")
+    pending_collection_datetimes = CollectionRecord.objects.select_related("customer", "collected_by").filter(
+        datetime_approval_status=CollectionRecord.DateTimeApprovalStatus.PENDING,
+        is_deleted=False,
+    ).order_by("-datetime_approval_requested_at", "-created_at")
+    pending_loans = LoanApplication.objects.select_related("customer").filter(
+        status=LoanApplication.Status.PENDING,
+        is_deleted=False,
+    ).order_by("-submitted_at", "-created_at")
+    pending_deposits = DepositAccount.objects.select_related("customer").filter(
+        status=DepositAccount.Status.PENDING,
+        is_deleted=False,
+    ).order_by("-created_at")
     context = {
         **admin.site.each_context(request),
         "title": "Approvals",
         "pending_kyc": pending_kyc,
         "pending_tickets": pending_tickets,
-        "approval_count": pending_kyc.count() + pending_tickets.count(),
+        "pending_collection_datetimes": pending_collection_datetimes,
+        "pending_loans": pending_loans,
+        "pending_deposits": pending_deposits,
+        "approval_count": (
+            pending_kyc.count()
+            + pending_tickets.count()
+            + pending_collection_datetimes.count()
+            + pending_loans.count()
+            + pending_deposits.count()
+        ),
     }
     return TemplateResponse(request, "admin/approvals.html", context)
 
@@ -1416,7 +2385,10 @@ if not getattr(admin.site, "_nanu_custom_urls_installed", False):
             path("profile-settings/", admin.site.admin_view(admin_profile_settings_view), name="myapp_staff_profile_settings"),
             path("reports/", admin.site.admin_view(admin_reports_view), name="myapp_reports"),
             path("accounting/", admin.site.admin_view(admin_accounting_view), name="myapp_accounting"),
+            path("calculator/", admin.site.admin_view(admin_calculator_view), name="myapp_calculator"),
             path("approvals/", admin.site.admin_view(admin_approvals_view), name="myapp_approvals"),
+            path("audit-security/", admin.site.admin_view(admin_audit_security_view), name="myapp_audit_security"),
+            path("system-settings/", admin.site.admin_view(admin_system_settings_redirect), name="myapp_system_settings"),
             path("recent-actions/", admin.site.admin_view(admin_recent_actions_view), name="myapp_recent_actions"),
         ]
         return custom_urls + original_get_urls()

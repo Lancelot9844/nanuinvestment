@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
@@ -291,7 +293,7 @@ class EBankingCredential(models.Model):
     temporary_password = models.CharField(
         max_length=128,
         blank=True,
-        help_text="Shown for admin handover. Cleared when the customer changes their password.",
+        help_text="Raw temporary passwords are shown once during handover and are not stored.",
     )
     password_changed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -319,6 +321,16 @@ class CollectionRecord(SoftDeleteModel):
         HOME = "home", "Home Visit"
         OFFICE = "office", "Office Collection"
 
+    class PaymentMethod(models.TextChoices):
+        CASH = "cash", "Cash"
+        ONLINE = "online", "Online"
+
+    class DateTimeApprovalStatus(models.TextChoices):
+        NOT_REQUIRED = "not_required", "Not Required"
+        PENDING = "pending", "Pending Approval"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="collections")
     collected_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -329,7 +341,25 @@ class CollectionRecord(SoftDeleteModel):
     )
     visit_type = models.CharField(max_length=20, choices=VisitType.choices, default=VisitType.SHOP)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    collected_at = models.DateTimeField()
+    payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH)
+    payment_reference = models.CharField(max_length=120, blank=True)
+    payment_receipt = models.FileField(upload_to="payment_receipts/", blank=True)
+    collected_at = models.DateTimeField(default=timezone.now)
+    collected_at_was_manual = models.BooleanField(default=False)
+    datetime_approval_status = models.CharField(
+        max_length=20,
+        choices=DateTimeApprovalStatus.choices,
+        default=DateTimeApprovalStatus.NOT_REQUIRED,
+    )
+    datetime_approval_requested_at = models.DateTimeField(null=True, blank=True)
+    datetime_approved_at = models.DateTimeField(null=True, blank=True)
+    datetime_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_collection_datetimes",
+    )
     note = models.CharField(max_length=220, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -368,6 +398,8 @@ class Transaction(SoftDeleteModel):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     balance_after = models.DecimalField(max_digits=12, decimal_places=2)
     payment_method = models.CharField(max_length=40, default="Cash")
+    payment_reference = models.CharField(max_length=120, blank=True)
+    payment_receipt = models.FileField(upload_to="payment_receipts/", blank=True)
     visit_type = models.CharField(max_length=20, choices=CollectionRecord.VisitType.choices)
     collected_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -394,6 +426,273 @@ class Transaction(SoftDeleteModel):
 
     def __str__(self):
         return f"{self.transaction_id} - {self.customer.full_name}"
+
+
+class SMSDelivery(models.Model):
+    class EventType(models.TextChoices):
+        COLLECTION_RECEIPT = "collection_receipt", "Collection Receipt"
+        EBANKING_LOGIN = "ebanking_login", "E-Banking Login"
+        TEMPORARY_PASSWORD = "temporary_password", "Temporary Password"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        QUEUED = "queued", "Queued by AakashSMS"
+        FAILED = "failed", "Failed"
+        SKIPPED = "skipped", "Skipped"
+
+    transaction = models.OneToOneField(
+        Transaction,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sms_delivery",
+    )
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sms_deliveries",
+    )
+    event_type = models.CharField(
+        max_length=40,
+        choices=EventType.choices,
+        default=EventType.COLLECTION_RECEIPT,
+    )
+    provider = models.CharField(max_length=40, default="AakashSMS")
+    recipient = models.CharField(max_length=20)
+    message = models.TextField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    provider_reference = models.CharField(max_length=80, blank=True)
+    provider_response = models.JSONField(default=dict, blank=True)
+    attempt_count = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(blank=True)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    queued_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "SMS Message"
+        verbose_name_plural = "SMS Messages"
+
+    def __str__(self):
+        reference = self.transaction.transaction_id if self.transaction else self.recipient
+        return f"{reference} - {self.get_status_display()}"
+
+
+class LoanApplication(SoftDeleteModel):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PENDING = "pending", "Pending Approval"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        CLOSED = "closed", "Closed"
+
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="loan_applications")
+    requested_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    approved_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    interest_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    duration_months = models.PositiveIntegerField(default=12)
+    purpose = models.CharField(max_length=220)
+    collateral_details = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_loans",
+    )
+    disbursed_at = models.DateTimeField(null=True, blank=True)
+    first_due_date = models.DateField(null=True, blank=True)
+    remarks = models.CharField(max_length=220, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-submitted_at", "-id"]
+        verbose_name = "Loan Application"
+        verbose_name_plural = "Loan Management"
+
+    def save(self, *args, **kwargs):
+        if self.status == self.Status.APPROVED and not self.approved_amount:
+            self.approved_amount = self.requested_amount
+        super().save(*args, **kwargs)
+
+    @property
+    def principal_amount(self):
+        return self.approved_amount or self.requested_amount
+
+    @property
+    def paid_amount(self):
+        return self.repayments.filter(is_deleted=False).aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
+
+    @property
+    def outstanding_amount(self):
+        if self.status not in (self.Status.APPROVED, self.Status.CLOSED):
+            return Decimal("0.00")
+        return max(self.principal_amount - self.paid_amount, Decimal("0.00"))
+
+    @property
+    def is_overdue(self):
+        return bool(
+            self.status == self.Status.APPROVED
+            and self.first_due_date
+            and self.first_due_date < timezone.localdate()
+            and self.outstanding_amount > 0
+        )
+
+    def __str__(self):
+        return f"{self.customer.full_name} - Rs {self.requested_amount}"
+
+
+class LoanRepayment(SoftDeleteModel):
+    class PaymentMethod(models.TextChoices):
+        CASH = "cash", "Cash"
+        ONLINE = "online", "Online"
+
+    loan = models.ForeignKey(LoanApplication, on_delete=models.CASCADE, related_name="repayments")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH)
+    payment_reference = models.CharField(max_length=120, blank=True)
+    payment_receipt = models.FileField(upload_to="loan_payment_receipts/", blank=True)
+    collected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="loan_repayments_collected",
+    )
+    paid_at = models.DateTimeField(default=timezone.now)
+    note = models.CharField(max_length=220, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-paid_at", "-id"]
+        verbose_name = "Loan Repayment"
+        verbose_name_plural = "Loan Repayments"
+
+    def __str__(self):
+        return f"{self.loan.customer.full_name} - Rs {self.amount}"
+
+
+class DepositAccount(SoftDeleteModel):
+    class DepositType(models.TextChoices):
+        FIXED = "fixed", "Fixed Deposit"
+        RECURRING = "recurring", "Recurring Deposit"
+
+    class InterestPayout(models.TextChoices):
+        MONTHLY = "monthly", "Monthly"
+        QUARTERLY = "quarterly", "Quarterly"
+        YEARLY = "yearly", "Yearly"
+        MATURITY = "maturity", "On Maturity"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending Approval"
+        ACTIVE = "active", "Active"
+        MATURED = "matured", "Matured"
+        CLOSED = "closed", "Closed"
+        REJECTED = "rejected", "Rejected"
+        CANCELLED = "cancelled", "Cancelled"
+
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="deposit_accounts")
+    deposit_type = models.CharField(max_length=20, choices=DepositType.choices, default=DepositType.FIXED)
+    principal_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    installment_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    interest_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    tenure_months = models.PositiveIntegerField(default=12)
+    interest_payout = models.CharField(max_length=20, choices=InterestPayout.choices, default=InterestPayout.MATURITY)
+    start_date = models.DateField(default=timezone.localdate)
+    maturity_date = models.DateField(null=True, blank=True)
+    next_due_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    nominee_name = models.CharField(max_length=160, blank=True)
+    nominee_phone = models.CharField(max_length=30, blank=True)
+    certificate_file = models.FileField(upload_to="deposit_certificates/", blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_deposits",
+    )
+    closed_at = models.DateTimeField(null=True, blank=True)
+    closure_reason = models.CharField(max_length=220, blank=True)
+    remarks = models.CharField(max_length=220, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        verbose_name = "Fixed / Recurring Deposit"
+        verbose_name_plural = "Fixed / Recurring Deposits"
+
+    @property
+    def total_paid(self):
+        payments_total = self.payments.filter(is_deleted=False).aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
+        if self.deposit_type == self.DepositType.FIXED:
+            return self.principal_amount + payments_total
+        return payments_total
+
+    @property
+    def maturity_amount(self):
+        base_amount = self.principal_amount if self.deposit_type == self.DepositType.FIXED else self.installment_amount * self.tenure_months
+        interest = (base_amount * self.interest_rate * self.tenure_months) / Decimal("1200")
+        return base_amount + interest
+
+    @property
+    def is_maturing_soon(self):
+        if not self.maturity_date or self.status != self.Status.ACTIVE:
+            return False
+        today = timezone.localdate()
+        return today <= self.maturity_date <= today + timezone.timedelta(days=7)
+
+    @property
+    def is_overdue(self):
+        return bool(
+            self.deposit_type == self.DepositType.RECURRING
+            and self.status == self.Status.ACTIVE
+            and self.next_due_date
+            and self.next_due_date < timezone.localdate()
+        )
+
+    def __str__(self):
+        return f"{self.customer.full_name} - {self.get_deposit_type_display()}"
+
+
+class DepositPayment(SoftDeleteModel):
+    class PaymentMethod(models.TextChoices):
+        CASH = "cash", "Cash"
+        ONLINE = "online", "Online"
+
+    deposit = models.ForeignKey(DepositAccount, on_delete=models.CASCADE, related_name="payments")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH)
+    payment_reference = models.CharField(max_length=120, blank=True)
+    payment_receipt = models.FileField(upload_to="deposit_payment_receipts/", blank=True)
+    collected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deposit_payments_collected",
+    )
+    paid_at = models.DateTimeField(default=timezone.now)
+    note = models.CharField(max_length=220, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-paid_at", "-id"]
+        verbose_name = "Deposit Payment"
+        verbose_name_plural = "Deposit Payments"
+
+    def __str__(self):
+        return f"{self.deposit.customer.full_name} - Rs {self.amount}"
 
 
 class Ticket(SoftDeleteModel):
@@ -550,3 +849,118 @@ class RecycleBinItem(models.Model):
 
     def __str__(self):
         return self.object_label
+
+
+class SecurityEvent(models.Model):
+    class EventType(models.TextChoices):
+        LOGIN_SUCCESS = "login_success", "Login Success"
+        LOGIN_FAILED = "login_failed", "Login Failed"
+        LOGOUT = "logout", "Logout"
+        SECURITY_REVIEW = "security_review", "Security Review"
+
+    event_type = models.CharField(max_length=40, choices=EventType.choices)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="security_events",
+    )
+    username = models.CharField(max_length=150, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=300, blank=True)
+    path = models.CharField(max_length=220, blank=True)
+    message = models.CharField(max_length=250, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Security Event"
+        verbose_name_plural = "Security Events"
+
+    def __str__(self):
+        label = self.username or self.user or "Unknown"
+        return f"{self.get_event_type_display()} - {label}"
+
+
+class SystemSetting(models.Model):
+    company_name = models.CharField(max_length=180, default="Nanu Investment Pvt. Ltd.")
+    company_address = models.CharField(max_length=220, default="Barahathawa-12, Sarlahi, Nepal")
+    company_phone = models.CharField(max_length=40, default="+977 9744360267")
+    company_email = models.EmailField(blank=True)
+    pan_vat_number = models.CharField(max_length=80, blank=True)
+    company_logo = models.FileField(upload_to="system/", blank=True)
+    favicon = models.FileField(upload_to="system/", blank=True)
+
+    receipt_prefix = models.CharField(max_length=12, default="TXN")
+    date_format = models.CharField(max_length=40, default="d M Y, H:i")
+    currency_label = models.CharField(max_length=12, default="Rs")
+    customer_signature_label = models.CharField(max_length=80, default="Customer Signature")
+    authorized_signature_label = models.CharField(max_length=80, default="Authorized Signature")
+    default_payment_method = models.CharField(max_length=40, default="Cash")
+    receipt_footer_text = models.CharField(
+        max_length=250,
+        default="This bill was generated by Nanu Investment transaction system.",
+    )
+
+    default_saving_interest_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    default_loan_interest_rate = models.DecimalField(max_digits=5, decimal_places=2, default=12)
+    default_fixed_deposit_rate = models.DecimalField(max_digits=5, decimal_places=2, default=8)
+    default_recurring_deposit_rate = models.DecimalField(max_digits=5, decimal_places=2, default=7)
+    penalty_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    grace_period_days = models.PositiveIntegerField(default=0)
+
+    require_manual_collection_datetime_approval = models.BooleanField(default=True)
+    require_loan_approval = models.BooleanField(default=True)
+    require_deposit_approval = models.BooleanField(default=True)
+    approval_threshold_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    failed_login_alert_threshold = models.PositiveIntegerField(default=5)
+    session_timeout_minutes = models.PositiveIntegerField(default=120)
+    password_policy_note = models.CharField(max_length=220, default="Use a strong password and do not share credentials.")
+    allow_staff_profile_uploads = models.BooleanField(default=True)
+
+    sms_sender_name = models.CharField(
+        max_length=80,
+        blank=True,
+        help_text="Name shown at the start of SMS messages. The AakashSMS account controls the network Sender ID.",
+    )
+    email_sender = models.EmailField(blank=True)
+    whatsapp_template = models.TextField(blank=True)
+    sms_receipt_template = models.TextField(
+        blank=True,
+        help_text=(
+            "Optional collection SMS template. Available fields: {company_name}, {customer_name}, "
+            "{customer_id}, {currency}, {amount}, {receipt}, {balance}, {date}, {payment_method}."
+        ),
+    )
+    email_receipt_template = models.TextField(blank=True)
+
+    maintenance_mode = models.BooleanField(default=False)
+    backup_note = models.CharField(max_length=220, blank=True)
+    last_backup_at = models.DateTimeField(null=True, blank=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_system_settings",
+    )
+
+    class Meta:
+        verbose_name = "System Setting"
+        verbose_name_plural = "System Settings"
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return "System Settings"

@@ -88,6 +88,117 @@
         {% endfor %}
       </div>
     </article>
+
+    <article class="approvals-panel">
+      <div class="approvals-panel-head">
+        <div>
+          <h2>Manual Collection Date/Time Requests</h2>
+          <p>Collections saved with a manually selected date/time. These collections are already counted normally.</p>
+        </div>
+      </div>
+      <div class="approvals-list">
+        {% for collection in pending_collection_datetimes %}
+          <div class="approval-item">
+            <div>
+              <strong>{{ collection.customer.full_name }}</strong>
+              <span>Rs {{ collection.amount|floatformat:2 }} - {{ collection.get_visit_type_display }} - Collected by {{ collection.collected_by|default:"-" }}</span>
+              <small>Manual date/time: {{ collection.collected_at|date:"d M Y, H:i" }} | Requested {{ collection.datetime_approval_requested_at|date:"d M Y, H:i"|default:"-" }}</small>
+            </div>
+            <div class="approval-actions">
+              <a class="approval-secondary" href="{% url 'admin:myapp_collectionrecord_change' collection.pk %}">Review</a>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="approve_collection_datetime">
+                <input type="hidden" name="object_id" value="{{ collection.pk }}">
+                <button type="submit">Approve</button>
+              </form>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reject_collection_datetime">
+                <input type="hidden" name="object_id" value="{{ collection.pk }}">
+                <button class="approval-danger" type="submit">Reject</button>
+              </form>
+            </div>
+          </div>
+        {% empty %}
+          <p class="approval-empty">No manual collection date/time requests waiting for approval.</p>
+        {% endfor %}
+      </div>
+    </article>
+
+    <article class="approvals-panel">
+      <div class="approvals-panel-head">
+        <div>
+          <h2>Loan Approval Requests</h2>
+          <p>Loan applications waiting for admin decision.</p>
+        </div>
+      </div>
+      <div class="approvals-list">
+        {% for loan in pending_loans %}
+          <div class="approval-item">
+            <div>
+              <strong>{{ loan.customer.full_name }}</strong>
+              <span>Requested Rs {{ loan.requested_amount|floatformat:2 }} - {{ loan.duration_months }} months - {{ loan.interest_rate|floatformat:2 }}%</span>
+              <small>{{ loan.purpose }} | Submitted {{ loan.submitted_at|date:"d M Y, H:i" }}</small>
+            </div>
+            <div class="approval-actions">
+              <a class="approval-secondary" href="{% url 'admin:myapp_loanapplication_change' loan.pk %}">Review</a>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="approve_loan">
+                <input type="hidden" name="object_id" value="{{ loan.pk }}">
+                <button type="submit">Approve</button>
+              </form>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reject_loan">
+                <input type="hidden" name="object_id" value="{{ loan.pk }}">
+                <button class="approval-danger" type="submit">Reject</button>
+              </form>
+            </div>
+          </div>
+        {% empty %}
+          <p class="approval-empty">No loan applications waiting for approval.</p>
+        {% endfor %}
+      </div>
+    </article>
+
+    <article class="approvals-panel">
+      <div class="approvals-panel-head">
+        <div>
+          <h2>Fixed / Recurring Deposit Requests</h2>
+          <p>Deposit accounts waiting for approval before activation.</p>
+        </div>
+      </div>
+      <div class="approvals-list">
+        {% for deposit in pending_deposits %}
+          <div class="approval-item">
+            <div>
+              <strong>{{ deposit.customer.full_name }}</strong>
+              <span>{{ deposit.get_deposit_type_display }} - Rs {{ deposit.principal_amount|floatformat:2 }} - {{ deposit.tenure_months }} months</span>
+              <small>Maturity {{ deposit.maturity_date|date:"d M Y"|default:"-" }} | Interest {{ deposit.interest_rate|floatformat:2 }}%</small>
+            </div>
+            <div class="approval-actions">
+              <a class="approval-secondary" href="{% url 'admin:myapp_depositaccount_change' deposit.pk %}">Review</a>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="approve_deposit">
+                <input type="hidden" name="object_id" value="{{ deposit.pk }}">
+                <button type="submit">Approve</button>
+              </form>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reject_deposit">
+                <input type="hidden" name="object_id" value="{{ deposit.pk }}">
+                <button class="approval-danger" type="submit">Reject</button>
+              </form>
+            </div>
+          </div>
+        {% empty %}
+          <p class="approval-empty">No fixed or recurring deposit requests waiting for approval.</p>
+        {% endfor %}
+      </div>
+    </article>
   </section>
 </div>
 {% endblock %}

@@ -4,14 +4,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Customer Login | Nanu Investment</title>
+  <title>Customer E-Banking Login | Nanu Investment</title>
+  <link rel="icon" href="{% static 'favicon.ico' %}" sizes="any">
   <link rel="stylesheet" href="{% static 'admin-modern.css' %}">
 </head>
 <body class="customer-portal">
   <main class="customer-auth-shell">
     <section class="customer-auth-card">
       <img src="{% static 'logo.jpeg' %}" alt="Nanu Investment logo">
-      <h1>Customer Login</h1>
+      <h1>Customer E-Banking</h1>
+      <p class="customer-auth-subtitle">Access your balance, transactions, support tickets, loans, and deposits.</p>
       {% if error %}
         <p class="customer-error">{{ error }}</p>
       {% endif %}

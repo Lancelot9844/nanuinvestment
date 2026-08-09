@@ -66,7 +66,7 @@ Main Django app for website data and page rendering.
   - `CollectionRecord`: staff/admin collection entries
   - `Transaction`: generated receipt/bill records from collections
   - `Ticket`: customer/admin support and staff work tickets
-  - `EBankingCredential`: customer login credential handover data
+  - `EBankingCredential`: customer login username and password handover status
   - `RecycleBinItem`: soft-delete recycle bin entries
 - `views.py` collects active content from the database and sends it to the React page through `site_content`.
 - `urls.py` defines website routes:
@@ -428,7 +428,7 @@ Stores customer support requests and internal staff work tickets. Staff-complete
 
 ### `EBankingCredential`
 
-Stores customer login credential handover records.
+Stores customer login username and password handover status. Raw temporary passwords are shown once during creation/reset handover and are not stored.
 
 ### `RecycleBinItem`
 
@@ -448,9 +448,31 @@ Stores soft-deleted admin records for recycle bin restore/permanent delete workf
 - Routes: `myapp/urls.py` and `nanuinvestment/urls.py`
 - Python dependencies: `requirements.txt`
 
+## AakashSMS notifications
+
+The system sends one collection-confirmation SMS after a new transaction is committed. In **E-Banking**, the **Send SMS** button opens an internal confirmation page showing the customer, account, normalized phone number, and message preview. Confirming sends the login notice directly through AakashSMS instead of opening a local phone application. Invalid Nepal mobile numbers are rejected before any provider request or SMS credit is used.
+
+SMS failure never rolls back or changes a financial transaction. Every queued, failed, or skipped attempt is available in **Finance & Control > SMS Messages**, where failed/skipped messages can be retried.
+
+To send a password, use **E-Banking > Reset & SMS Password**. Enter a new temporary password twice, keep **Send this temporary password by SMS** selected, and submit. The real password exists only long enough to set Django's password hash and make the AakashSMS request. The SMS audit message and provider response are redacted, so a failed temporary-password SMS cannot be retried; reset the password again to generate and send a new value. Customers using a temporary password are required to change it before accessing their dashboard.
+
+Configure the private AakashSMS token in the same PowerShell session used to start Django:
+
+```powershell
+$env:AAKASHSMS_AUTH_TOKEN="paste-your-private-token-here"
+python manage.py runserver 0.0.0.0:5173
+```
+
+Providing a token enables SMS automatically. Set `$env:SMS_ENABLED="False"` to disable sending while retaining the integration. Optional settings are `AAKASHSMS_API_URL` and `AAKASHSMS_TIMEOUT_SECONDS`. Never add the real token to Git, Django System Settings, source files, screenshots, or support messages.
+
+The message prefix and optional receipt template are configured under **System Setting > Notification Settings**. Supported template fields are `{company_name}`, `{customer_name}`, `{customer_id}`, `{currency}`, `{amount}`, `{receipt}`, `{balance}`, `{date}`, and `{payment_method}`. Customer phone numbers may use `98XXXXXXXX` or `+977 98XXXXXXXX` format and are normalized to the 10-digit format required by AakashSMS.
+
 ## Notes
 
 - This project currently uses SQLite for local development.
+- Local development generates a git-ignored `.local_secret_key` automatically. For production, set `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, `DJANGO_ALLOWED_HOSTS`, and any required `DJANGO_CSRF_TRUSTED_ORIGINS` environment variables before starting Django.
+- For testing from a phone on the same Wi-Fi network, start Django with `python manage.py runserver 0.0.0.0:5173`, then open `http://<computer-ip>:5173/` on the phone. Development mode automatically allows the computer hostname and its active local IPv4 addresses. Keep the Windows firewall network permission enabled for Python.
+- Production database can be configured with `DATABASE_URL`, for example PostgreSQL (`postgresql://user:password@host:5432/dbname`) or MySQL/MariaDB (`mysql://user:password@host:3306/dbname`). Install the matching database driver on the server.
 - Uploaded media files are served only in development through Django when `DEBUG = True`.
 - For production, configure a proper static/media file hosting setup and set secure Django settings.
 - Avoid manually changing Vite build output in `templates/react/`; change the React source files and rebuild.

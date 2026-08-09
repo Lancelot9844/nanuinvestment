@@ -1,0 +1,110 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Home</a> &rsaquo; Audit &amp; Security</div>
+{% endblock %}
+
+{% block content_title %}{% endblock %}
+
+{% block content %}
+<div class="audit-page">
+  <section class="accounting-hero">
+    <div>
+      <h1>Audit &amp; Security</h1>
+      <p>Review account access, admin activity, approvals, sessions, and system security status.</p>
+    </div>
+  </section>
+
+  <section class="accounting-metrics audit-metrics" aria-label="Audit summary">
+    <article><div class="accounting-metric-top"><span>Failed Logins Today</span><i>!</i></div><strong>{{ failed_logins_today }}</strong><small>Security events</small></article>
+    <article><div class="accounting-metric-top"><span>Pending Approvals</span><i>✓</i></div><strong>{{ pending_approval_count }}</strong><small>KYC, loans, deposits, tickets</small></article>
+    <article><div class="accounting-metric-top"><span>Active Sessions</span><i>S</i></div><strong>{{ active_sessions }}</strong><small>Unexpired login sessions</small></article>
+    <article><div class="accounting-metric-top"><span>Debug Mode</span><i>D</i></div><strong>{% if debug_enabled %}On{% else %}Off{% endif %}</strong><small>Timezone: {{ timezone_name }}</small></article>
+  </section>
+
+  <section class="audit-grid">
+    <article class="audit-panel">
+      <div class="audit-panel-head">
+        <h2>Login &amp; Security Events</h2>
+        <a href="{% url 'admin:myapp_securityevent_changelist' %}">View all</a>
+      </div>
+      <div class="audit-list">
+        {% for event in security_events %}
+          <div class="audit-item">
+            <strong>{{ event.get_event_type_display }}</strong>
+            <span>{{ event.username|default:event.user|default:"Unknown" }} - {{ event.ip_address|default:"No IP" }}</span>
+            <small>{{ event.created_at|date:"d M Y, H:i" }} - {{ event.path|default:"-" }}</small>
+          </div>
+        {% empty %}
+          <p class="empty-dashboard">No security events recorded yet.</p>
+        {% endfor %}
+      </div>
+    </article>
+
+    <article class="audit-panel">
+      <div class="audit-panel-head">
+        <h2>Recent Admin Activity</h2>
+        <a href="{% url 'admin:myapp_recent_actions' %}">Recent actions</a>
+      </div>
+      <div class="audit-list">
+        {% for entry in recent_admin_logs %}
+          <div class="audit-item">
+            <strong>{{ entry.object_repr }}</strong>
+            <span>{{ entry.user|default:"System" }} - {{ entry.content_type|default:"Unknown record" }}</span>
+            <small>{{ entry.action_time|date:"d M Y, H:i" }}</small>
+          </div>
+        {% empty %}
+          <p class="empty-dashboard">No admin actions recorded yet.</p>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+
+  <section class="audit-panel">
+    <div class="audit-panel-head">
+      <h2>Staff Permission Review</h2>
+      <a href="{% url 'admin:auth_user_changelist' %}">Manage users</a>
+    </div>
+    <div class="audit-table-wrap">
+      <table>
+        <thead><tr><th>User</th><th>Role</th><th>Groups</th><th>Last Login</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for staff in staff_users %}
+            <tr>
+              <td>{{ staff.get_full_name|default:staff.username }}</td>
+              <td>{% if staff.is_superuser %}Super Admin{% else %}Staff{% endif %}</td>
+              <td>{% for group in staff.groups.all %}{{ group.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
+              <td>{{ staff.last_login|date:"d M Y, H:i"|default:"Never" }}</td>
+              <td>{% if staff.is_active %}<span class="admin-status status-active">Active</span>{% else %}<span class="admin-status status-hidden">Inactive</span>{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5">No staff users found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="audit-grid">
+    <article class="audit-panel">
+      <div class="audit-panel-head"><h2>Security Checks</h2></div>
+      <div class="audit-checks">
+        <div><strong>Timezone</strong><span>{{ timezone_name }}</span></div>
+        <div><strong>Language</strong><span>{{ language_code }}</span></div>
+        <div><strong>Debug Mode</strong><span>{% if debug_enabled %}Enabled for development{% else %}Disabled{% endif %}</span></div>
+        <div><strong>Recycle Bin</strong><span><a href="{% url 'admin:myapp_recyclebinitem_changelist' %}">Review deleted records</a></span></div>
+      </div>
+    </article>
+
+    <article class="audit-panel">
+      <div class="audit-panel-head"><h2>Sensitive Areas</h2></div>
+      <div class="side-links">
+        <a href="{% url 'admin:myapp_approvals' %}">Approval Queue</a>
+        <a href="{% url 'admin:myapp_collectionrecord_changelist' %}">Collection Records</a>
+        <a href="{% url 'admin:myapp_loanapplication_changelist' %}">Loan Management</a>
+        <a href="{% url 'admin:myapp_depositaccount_changelist' %}">Fixed / Recurring Deposits</a>
+      </div>
+    </article>
+  </section>
+</div>
+{% endblock %}

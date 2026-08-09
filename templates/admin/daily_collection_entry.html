@@ -30,7 +30,7 @@
     <div class="collection-entry-layout">
       <section class="module collection-entry-form">
         <h2>Add Collection</h2>
-        <form method="post" novalidate>
+        <form method="post" enctype="multipart/form-data" novalidate>
           {% csrf_token %}
           {% if form.non_field_errors %}
             <div class="errornote">{{ form.non_field_errors }}</div>

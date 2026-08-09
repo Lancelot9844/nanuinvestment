@@ -1,0 +1,190 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Home</a> &rsaquo; Calculator</div>
+{% endblock %}
+
+{% block content_title %}{% endblock %}
+
+{% block content %}
+<div class="calculator-page">
+  <section class="accounting-hero">
+    <div>
+      <h1>Calculator</h1>
+      <p>Calculate cooperative interest, maturity value, recurring deposits, EMI, and loan balance in real time.</p>
+    </div>
+  </section>
+
+  <section class="calculator-grid">
+    <article class="calculator-panel">
+      <div class="calculator-panel-head">
+        <h2>Interest &amp; Maturity</h2>
+        <p>For savings, fixed deposits, and general interest calculations.</p>
+      </div>
+      <div class="calculator-form" data-calculator="interest">
+        <label>Principal amount <input type="number" min="0" step="0.01" data-field="principal" value="100000"></label>
+        <label>Annual interest rate (%) <input type="number" min="0" step="0.01" data-field="rate" value="8"></label>
+        <label>Duration <input type="number" min="0" step="1" data-field="duration" value="12"></label>
+        <label>Duration type
+          <select data-field="durationType">
+            <option value="months">Months</option>
+            <option value="years">Years</option>
+          </select>
+        </label>
+        <label>Calculation type
+          <select data-field="mode">
+            <option value="simple">Simple Interest</option>
+            <option value="compound">Compound Interest</option>
+          </select>
+        </label>
+        <label>Compound frequency
+          <select data-field="frequency">
+            <option value="12">Monthly</option>
+            <option value="4">Quarterly</option>
+            <option value="1">Yearly</option>
+          </select>
+        </label>
+      </div>
+      <div class="calculator-results">
+        <div><span>Interest</span><strong data-result="interest">Rs 0.00</strong></div>
+        <div><span>Maturity value</span><strong data-result="maturity">Rs 0.00</strong></div>
+        <div><span>Monthly interest</span><strong data-result="monthlyInterest">Rs 0.00</strong></div>
+      </div>
+    </article>
+
+    <article class="calculator-panel">
+      <div class="calculator-panel-head">
+        <h2>Recurring Deposit</h2>
+        <p>Estimate recurring monthly deposit maturity.</p>
+      </div>
+      <div class="calculator-form" data-calculator="rd">
+        <label>Monthly installment <input type="number" min="0" step="0.01" data-field="installment" value="5000"></label>
+        <label>Annual interest rate (%) <input type="number" min="0" step="0.01" data-field="rate" value="7"></label>
+        <label>Tenure months <input type="number" min="1" step="1" data-field="months" value="12"></label>
+      </div>
+      <div class="calculator-results">
+        <div><span>Total deposit</span><strong data-result="totalDeposit">Rs 0.00</strong></div>
+        <div><span>Estimated interest</span><strong data-result="interest">Rs 0.00</strong></div>
+        <div><span>Maturity value</span><strong data-result="maturity">Rs 0.00</strong></div>
+      </div>
+    </article>
+
+    <article class="calculator-panel">
+      <div class="calculator-panel-head">
+        <h2>Loan EMI</h2>
+        <p>Calculate installment, payable amount, and interest.</p>
+      </div>
+      <div class="calculator-form" data-calculator="emi">
+        <label>Loan amount <input type="number" min="0" step="0.01" data-field="principal" value="200000"></label>
+        <label>Annual interest rate (%) <input type="number" min="0" step="0.01" data-field="rate" value="12"></label>
+        <label>Tenure months <input type="number" min="1" step="1" data-field="months" value="24"></label>
+      </div>
+      <div class="calculator-results">
+        <div><span>Monthly EMI</span><strong data-result="emi">Rs 0.00</strong></div>
+        <div><span>Total payable</span><strong data-result="totalPayable">Rs 0.00</strong></div>
+        <div><span>Total interest</span><strong data-result="interest">Rs 0.00</strong></div>
+      </div>
+    </article>
+
+    <article class="calculator-panel">
+      <div class="calculator-panel-head">
+        <h2>Loan Balance</h2>
+        <p>Calculate remaining balance after repayments.</p>
+      </div>
+      <div class="calculator-form" data-calculator="balance">
+        <label>Approved loan amount <input type="number" min="0" step="0.01" data-field="loanAmount" value="150000"></label>
+        <label>Total repaid <input type="number" min="0" step="0.01" data-field="repaid" value="25000"></label>
+        <label>Penalty / extra charge <input type="number" min="0" step="0.01" data-field="extra" value="0"></label>
+        <label>Discount / rebate <input type="number" min="0" step="0.01" data-field="rebate" value="0"></label>
+      </div>
+      <div class="calculator-results">
+        <div><span>Remaining balance</span><strong data-result="balance">Rs 0.00</strong></div>
+        <div><span>Net adjustment</span><strong data-result="adjustment">Rs 0.00</strong></div>
+      </div>
+    </article>
+  </section>
+</div>
+
+<script>
+  (function () {
+    const money = new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'NPR',
+      currencyDisplay: 'narrowSymbol',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+    const amount = (value) => money.format(Number.isFinite(value) ? value : 0).replace('रू', 'Rs');
+    const number = (panel, name) => Number(panel.querySelector(`[data-field="${name}"]`)?.value || 0);
+    const text = (panel, name) => panel.querySelector(`[data-field="${name}"]`)?.value || '';
+    const write = (panel, name, value) => {
+      const target = panel.querySelector(`[data-result="${name}"]`);
+      if (target) target.textContent = amount(value);
+    };
+
+    function calculateInterest(panel) {
+      const principal = number(panel, 'principal');
+      const rate = number(panel, 'rate') / 100;
+      const rawDuration = number(panel, 'duration');
+      const years = text(panel, 'durationType') === 'years' ? rawDuration : rawDuration / 12;
+      const mode = text(panel, 'mode');
+      const frequency = Math.max(number(panel, 'frequency'), 1);
+      const maturity = mode === 'compound'
+        ? principal * Math.pow(1 + rate / frequency, frequency * years)
+        : principal + (principal * rate * years);
+      const interest = maturity - principal;
+      write(panel, 'interest', interest);
+      write(panel, 'maturity', maturity);
+      write(panel, 'monthlyInterest', interest / Math.max(years * 12, 1));
+    }
+
+    function calculateRecurring(panel) {
+      const installment = number(panel, 'installment');
+      const rate = number(panel, 'rate') / 100;
+      const months = Math.max(number(panel, 'months'), 1);
+      const totalDeposit = installment * months;
+      const interest = installment * months * (months + 1) / 2 * rate / 12;
+      write(panel, 'totalDeposit', totalDeposit);
+      write(panel, 'interest', interest);
+      write(panel, 'maturity', totalDeposit + interest);
+    }
+
+    function calculateEmi(panel) {
+      const principal = number(panel, 'principal');
+      const monthlyRate = number(panel, 'rate') / 1200;
+      const months = Math.max(number(panel, 'months'), 1);
+      const emi = monthlyRate
+        ? principal * monthlyRate * Math.pow(1 + monthlyRate, months) / (Math.pow(1 + monthlyRate, months) - 1)
+        : principal / months;
+      const totalPayable = emi * months;
+      write(panel, 'emi', emi);
+      write(panel, 'totalPayable', totalPayable);
+      write(panel, 'interest', totalPayable - principal);
+    }
+
+    function calculateBalance(panel) {
+      const loanAmount = number(panel, 'loanAmount');
+      const repaid = number(panel, 'repaid');
+      const extra = number(panel, 'extra');
+      const rebate = number(panel, 'rebate');
+      write(panel, 'balance', Math.max(loanAmount + extra - rebate - repaid, 0));
+      write(panel, 'adjustment', extra - rebate);
+    }
+
+    const calculators = {
+      interest: calculateInterest,
+      rd: calculateRecurring,
+      emi: calculateEmi,
+      balance: calculateBalance
+    };
+
+    document.querySelectorAll('[data-calculator]').forEach((form) => {
+      const panel = form.closest('.calculator-panel');
+      const run = () => calculators[form.dataset.calculator]?.(panel);
+      form.addEventListener('input', run);
+      form.addEventListener('change', run);
+      run();
+    });
+  })();
+</script>
+{% endblock %}

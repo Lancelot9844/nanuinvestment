@@ -15,6 +15,13 @@ def ensure_content_groups(sender, **kwargs):
         "dailycollection",
         "collectionrecord",
         "transaction",
+        "loanapplication",
+        "loanrepayment",
+        "depositaccount",
+        "depositpayment",
+        "securityevent",
+        "smsdelivery",
+        "systemsetting",
         "ticket",
     )
     content_types = ContentType.objects.filter(app_label="myapp", model__in=model_names)
@@ -45,13 +52,67 @@ def ensure_admin_profile(sender, instance, created, **kwargs):
         AdminProfile.objects.get_or_create(user=instance)
 
 
+def schedule_transaction_sms(sender, instance, created, **kwargs):
+    if not created or instance.status != sender.Status.COMPLETED:
+        return
+
+    from .sms import schedule_collection_receipt_sms
+
+    schedule_collection_receipt_sms(instance.pk)
+
+
+def get_request_ip(request):
+    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR")
+
+
+def record_login_success(sender, request, user, **kwargs):
+    from .models import SecurityEvent
+
+    SecurityEvent.objects.create(
+        event_type=SecurityEvent.EventType.LOGIN_SUCCESS,
+        user=user,
+        username=user.get_username(),
+        ip_address=get_request_ip(request),
+        user_agent=request.META.get("HTTP_USER_AGENT", "")[:300],
+        path=request.path[:220],
+        message="Successful login",
+    )
+
+
+def record_login_failed(sender, credentials, request, **kwargs):
+    from .models import SecurityEvent
+
+    username = (credentials or {}).get("username", "")
+    SecurityEvent.objects.create(
+        event_type=SecurityEvent.EventType.LOGIN_FAILED,
+        username=username,
+        ip_address=get_request_ip(request) if request else None,
+        user_agent=(request.META.get("HTTP_USER_AGENT", "") if request else "")[:300],
+        path=(request.path if request else "")[:220],
+        message="Failed login attempt",
+    )
+
+
 class MyappConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "myapp"
 
     def ready(self):
+        from django.contrib.auth.signals import user_login_failed, user_logged_in
         from django.contrib.auth import get_user_model
         from django.db.models.signals import post_save
 
+        from .models import Transaction
+
         post_migrate.connect(ensure_content_groups, sender=self)
         post_save.connect(ensure_admin_profile, sender=get_user_model())
+        post_save.connect(
+            schedule_transaction_sms,
+            sender=Transaction,
+            dispatch_uid="myapp.schedule_transaction_sms",
+        )
+        user_logged_in.connect(record_login_success, sender=get_user_model())
+        user_login_failed.connect(record_login_failed)

@@ -1,56 +1,204 @@
-{% load static %}
+{% load static humanize %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Customer Dashboard | Nanu Investment</title>
+  <title>E-Banking Dashboard | Nanu Investment</title>
+  <link rel="icon" href="{% static 'favicon.ico' %}" sizes="any">
   <link rel="stylesheet" href="{% static 'admin-modern.css' %}">
 </head>
-<body class="customer-portal">
-  <main class="customer-dashboard">
-    <header class="customer-dashboard-header">
-      <div class="customer-dashboard-identity">
-        <img src="{% static 'logo.jpeg' %}" alt="Nanu Investment logo">
-        <div class="customer-profile-row">
-          <span class="customer-profile-photo">
-            {% if customer.profile_photo %}
-              <img src="{{ customer.profile_photo.url }}" alt="">
-            {% else %}
-              {{ customer.full_name|default:customer.customer_id|first|upper }}
-            {% endif %}
-          </span>
-          <span>
-            <h1>{{ customer.full_name }}</h1>
-            <p>{{ customer.customer_id }}</p>
-          </span>
-        </div>
+<body class="customer-portal ebanking-portal">
+  <main id="ebanking-dashboard" class="customer-dashboard ebanking-dashboard">
+    <header class="ebanking-topbar">
+      <div class="ebanking-brand">
+        <img src="{% static 'admin-logo.png' %}" alt="Nanu Investment logo">
+        <span>
+          <strong>Nanu Investment</strong>
+          <small>Customer E-Banking</small>
+        </span>
       </div>
-      <nav class="customer-header-actions">
-        <a href="{% url 'customer_profile_settings' %}">Profile Settings</a>
-        <a href="{% url 'customer_change_password' %}">Change Password</a>
+      <nav class="customer-header-actions ebanking-actions">
+        <a href="{% url 'customer_profile_settings' %}">Profile</a>
+        <a href="{% url 'customer_change_password' %}">Security</a>
         <a href="{% url 'customer_logout' %}">Log Out</a>
       </nav>
+      <details class="ebanking-mobile-menu">
+        <summary aria-label="Open E-Banking menu" title="Menu">
+          <span class="ebanking-menu-icon" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+        </summary>
+        <nav aria-label="Mobile E-Banking navigation">
+          <a href="#ebanking-dashboard"><span>Home</span><small>Account overview</small></a>
+          <a href="#account-balance"><span>Balance</span><small>Available account balance</small></a>
+          <a href="#recent-transactions"><span>Transactions</span><small>Recent collection receipts</small></a>
+          <a href="#support-tickets"><span>Support</span><small>Requests and new tickets</small></a>
+          <a href="{% url 'customer_profile_settings' %}"><span>Profile</span><small>Photo and account details</small></a>
+          <a href="{% url 'customer_change_password' %}"><span>Security</span><small>Change your password</small></a>
+          <a class="ebanking-mobile-logout" href="{% url 'customer_logout' %}"><span>Log Out</span><small>End this E-Banking session</small></a>
+        </nav>
+      </details>
     </header>
 
-    <section class="customer-summary-grid">
+    <section class="ebanking-hero">
+      <div class="ebanking-hero-copy">
+        <span class="ebanking-kicker">Welcome back</span>
+        <h1>{{ customer.full_name }}</h1>
+        <p>{{ customer.get_account_type_display }}</p>
+      </div>
+      <div class="ebanking-profile-card">
+        <span class="customer-profile-photo">
+          {% if customer.profile_photo %}
+            <img src="{{ customer.profile_photo.url }}" alt="">
+          {% else %}
+            {{ customer.full_name|default:customer.customer_id|first|upper }}
+          {% endif %}
+        </span>
+        <div>
+          <strong>{{ customer.get_kyc_status_display }}</strong>
+          <small>KYC Status</small>
+        </div>
+      </div>
+    </section>
+
+    <section id="account-balance" class="ebanking-balance-card">
+      <div>
+        <span>Available Balance</span>
+        <strong>{{ currency_label }} {{ account_total|floatformat:2|intcomma }}</strong>
+      </div>
+      <div class="ebanking-account-chip">
+        <span>Account No.</span>
+        <strong>{{ customer.customer_id }}</strong>
+      </div>
+    </section>
+
+    <section class="customer-summary-grid ebanking-summary-grid">
       <article>
-        <span>Account Type</span>
-        <strong>{{ customer.get_account_type_display }}</strong>
+        <span>This Month Deposit</span>
+        <strong>{{ currency_label }} {{ monthly_collected|floatformat:2|intcomma }}</strong>
+        <small>Collected in current month</small>
       </article>
       <article>
-        <span>KYC Status</span>
-        <strong>{{ customer.get_kyc_status_display }}</strong>
+        <span>Loan Outstanding</span>
+        <strong>{{ currency_label }} {{ loan_outstanding|floatformat:2|intcomma }}</strong>
+        <small>{{ active_loan_count }} active loan{{ active_loan_count|pluralize }}</small>
       </article>
       <article>
-        <span>Current Amount</span>
-        <strong>Rs {{ account_total }}</strong>
+        <span>Fixed / Recurring</span>
+        <strong>{{ currency_label }} {{ deposit_total|floatformat:2|intcomma }}</strong>
+        <small>{{ active_deposit_count }} active deposit{{ active_deposit_count|pluralize }}</small>
+      </article>
+      <article>
+        <span>Support Requests</span>
+        <strong>{{ open_ticket_count }}</strong>
+        <small>Open or pending tickets</small>
       </article>
     </section>
 
-    <section class="customer-panel">
+    <section class="ebanking-quick-actions">
+      <a href="{% url 'customer_create_ticket' %}"><strong>+</strong><span>New Support Ticket</span></a>
+      <a href="{% url 'customer_profile_settings' %}"><strong>P</strong><span>Update Profile Photo</span></a>
+      <a href="{% url 'customer_change_password' %}"><strong>S</strong><span>Change Password</span></a>
+      <a href="#recent-transactions"><strong>T</strong><span>View Transactions</span></a>
+    </section>
+
+    <div class="ebanking-content-grid">
+      <section class="customer-panel ebanking-panel">
+        <div class="customer-panel-header">
+          <div>
+            <h2>Weekly Collection</h2>
+            <p>Last 7 days account activity</p>
+          </div>
+          {% if last_collection %}
+            <span class="ebanking-soft-pill">Last: {{ currency_label }} {{ last_collection.amount|floatformat:2|intcomma }}</span>
+          {% endif %}
+        </div>
+        <div class="ebanking-bars">
+          {% for item in weekly_activity %}
+            <div class="ebanking-bar-item">
+              <span class="ebanking-bar" style="height: {{ item.height }}%"></span>
+              <small>{{ item.label }}</small>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="customer-panel ebanking-panel">
+        <div class="customer-panel-header">
+          <div>
+            <h2>Account Health</h2>
+            <p>Important customer status</p>
+          </div>
+        </div>
+        <div class="ebanking-health-list">
+          <div>
+            <span>KYC</span>
+            <strong>{{ customer.get_kyc_status_display }}</strong>
+          </div>
+          <div>
+            <span>Mobile</span>
+            <strong>{{ customer.phone_number }}</strong>
+          </div>
+          <div>
+            <span>Nominee</span>
+            <strong>{{ customer.nominee_name|default:"Not added" }}</strong>
+          </div>
+          <div>
+            <span>Last Collection</span>
+            <strong>{% if last_collection %}{{ last_collection.collected_at|date:"d M Y" }}{% else %}No records{% endif %}</strong>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section id="recent-transactions" class="customer-panel ebanking-panel">
       <div class="customer-panel-header">
-        <h2>Support Tickets</h2>
+        <div>
+          <h2>Recent Transactions</h2>
+          <p>Collection receipts generated for your account</p>
+        </div>
+      </div>
+      {% if transactions %}
+        <div class="customer-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Receipt</th>
+                <th>Date</th>
+                <th>Method</th>
+                <th>Reference</th>
+                <th>Amount</th>
+                <th>Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for transaction in transactions %}
+                <tr>
+                  <td><strong>{{ transaction.transaction_id }}</strong></td>
+                  <td>{{ transaction.transacted_at|date:"d M Y, H:i" }}</td>
+                  <td>{{ transaction.payment_method }}</td>
+                  <td>{{ transaction.payment_reference|default:"-" }}</td>
+                  <td>{{ currency_label }} {{ transaction.amount|floatformat:2|intcomma }}</td>
+                  <td>{{ currency_label }} {{ transaction.balance_after|floatformat:2|intcomma }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="customer-empty">No transaction records yet.</p>
+      {% endif %}
+    </section>
+
+    <section id="support-tickets" class="customer-panel ebanking-panel">
+      <div class="customer-panel-header">
+        <div>
+          <h2>Support Tickets</h2>
+          <p>Your recent service requests</p>
+        </div>
         <a href="{% url 'customer_create_ticket' %}">Create Ticket</a>
       </div>
       {% if tickets %}
@@ -80,36 +228,20 @@
         <p class="customer-empty">No tickets created yet.</p>
       {% endif %}
     </section>
-
-    <section class="customer-panel">
-      <h2>Recent Collections</h2>
-      {% if collections %}
-        <div class="customer-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Amount</th>
-                <th>Location</th>
-                <th>Collected By</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for collection in collections %}
-                <tr>
-                  <td>{{ collection.collected_at|date:"d M Y" }}</td>
-                  <td>Rs {{ collection.amount }}</td>
-                  <td>{{ collection.get_visit_type_display }}</td>
-                  <td>{{ collection.collected_by|default:"-" }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <p class="customer-empty">No collection records yet.</p>
-      {% endif %}
-    </section>
   </main>
+  <script>
+    (() => {
+      const menu = document.querySelector('.ebanking-mobile-menu');
+      if (!menu) return;
+
+      menu.addEventListener('click', (event) => {
+        if (event.target.closest('a')) menu.removeAttribute('open');
+      });
+
+      document.addEventListener('click', (event) => {
+        if (menu.open && !menu.contains(event.target)) menu.removeAttribute('open');
+      });
+    })();
+  </script>
 </body>
 </html>

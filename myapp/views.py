@@ -1,4 +1,5 @@
 from pathlib import Path
+from decimal import Decimal
 
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -10,7 +11,26 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from .forms import CustomerProfilePhotoForm, CustomerTicketForm
-from .models import Banner, Customer, Download, EBankingCredential, NewsActivity, Notice, WebsitePopup
+from .models import (
+    Banner,
+    Customer,
+    DepositAccount,
+    Download,
+    EBankingCredential,
+    LoanApplication,
+    NewsActivity,
+    Notice,
+    SystemSetting,
+    WebsitePopup,
+)
+
+
+def customer_must_change_password(user):
+    try:
+        credential = user.ebanking_credential
+    except EBankingCredential.DoesNotExist:
+        return False
+    return credential.password_changed_at is None
 
 
 def serialize_item(item):
@@ -95,6 +115,8 @@ def customer_login(request):
     if request.user.is_authenticated:
         if request.user.is_staff:
             return redirect("admin:index")
+        if customer_must_change_password(request.user):
+            return redirect("customer_change_password")
         return redirect("customer_dashboard")
 
     error = ""
@@ -106,6 +128,8 @@ def customer_login(request):
             login(request, user)
             if user.is_staff:
                 return redirect(request.GET.get("next") or "admin:index")
+            if customer_must_change_password(user):
+                return redirect("customer_change_password")
             return redirect(request.GET.get("next") or "customer_dashboard")
         error = "Invalid username or password."
 
@@ -122,18 +146,62 @@ def customer_dashboard(request):
     customer = getattr(request.user, "customer_profile", None)
     if customer is None:
         return render(request, "customer/no_account.html")
+    if customer_must_change_password(request.user):
+        return redirect("customer_change_password")
 
-    collections = customer.collections.select_related("collected_by")[:12]
-    collected_total = customer.collections.aggregate(total=Sum("amount"))["total"] or 0
+    system_setting = SystemSetting.get_solo()
+    collection_queryset = customer.collections.select_related("collected_by")
+    collections = collection_queryset[:12]
+    transactions = customer.transactions.select_related("collected_by")[:10]
+    collected_total = collection_queryset.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    account_total = customer.opening_balance + collected_total
+    now = timezone.localtime()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    monthly_collected = (
+        collection_queryset.filter(collected_at__gte=month_start).aggregate(total=Sum("amount"))["total"]
+        or Decimal("0.00")
+    )
+    last_collection = collection_queryset.first()
     tickets = customer.tickets.select_related("assigned_to")[:10]
+    open_ticket_count = customer.tickets.exclude(status=customer.tickets.model.Status.VERIFIED_COMPLETED).count()
+    active_loans = customer.loan_applications.filter(status=LoanApplication.Status.APPROVED)
+    loan_outstanding = sum((loan.outstanding_amount for loan in active_loans), Decimal("0.00"))
+    active_deposits = customer.deposit_accounts.filter(status=DepositAccount.Status.ACTIVE)
+    deposit_total = sum((deposit.total_paid for deposit in active_deposits), Decimal("0.00"))
+    weekly_activity = []
+    max_weekly_amount = Decimal("0.00")
+    for offset in range(6, -1, -1):
+        day = timezone.localdate() - timezone.timedelta(days=offset)
+        amount = (
+            collection_queryset.filter(collected_at__date=day).aggregate(total=Sum("amount"))["total"]
+            or Decimal("0.00")
+        )
+        max_weekly_amount = max(max_weekly_amount, amount)
+        weekly_activity.append({"label": day.strftime("%a"), "amount": amount, "height": 0})
+    if max_weekly_amount > 0:
+        weekly_activity = [
+            {**item, "height": max(12, int((item["amount"] / max_weekly_amount) * 100))}
+            for item in weekly_activity
+        ]
+
     return render(
         request,
         "customer/dashboard.html",
         {
             "customer": customer,
+            "currency_label": system_setting.currency_label or "Rs",
             "collections": collections,
-            "account_total": customer.opening_balance + collected_total,
+            "transactions": transactions,
+            "account_total": account_total,
+            "monthly_collected": monthly_collected,
+            "last_collection": last_collection,
             "tickets": tickets,
+            "open_ticket_count": open_ticket_count,
+            "loan_outstanding": loan_outstanding,
+            "deposit_total": deposit_total,
+            "active_deposit_count": active_deposits.count(),
+            "active_loan_count": active_loans.count(),
+            "weekly_activity": weekly_activity,
         },
     )
 
@@ -143,6 +211,8 @@ def customer_create_ticket(request):
     customer = getattr(request.user, "customer_profile", None)
     if customer is None:
         return render(request, "customer/no_account.html")
+    if customer_must_change_password(request.user):
+        return redirect("customer_change_password")
 
     if request.method == "POST":
         form = CustomerTicketForm(request.POST)
@@ -164,6 +234,8 @@ def customer_profile_settings(request):
     customer = getattr(request.user, "customer_profile", None)
     if customer is None:
         return render(request, "customer/no_account.html")
+    if customer_must_change_password(request.user):
+        return redirect("customer_change_password")
 
     if request.method == "POST":
         form = CustomerProfilePhotoForm(request.POST, request.FILES, instance=customer)
@@ -200,4 +272,12 @@ def customer_change_password(request):
     else:
         form = PasswordChangeForm(request.user)
 
-    return render(request, "customer/password_change.html", {"form": form, "customer": customer})
+    return render(
+        request,
+        "customer/password_change.html",
+        {
+            "form": form,
+            "customer": customer,
+            "password_change_required": customer_must_change_password(request.user),
+        },
+    )

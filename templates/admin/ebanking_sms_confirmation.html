@@ -1,0 +1,55 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <div class="sms-confirmation-page">
+    <section class="module sms-confirmation-card">
+      <div class="sms-confirmation-heading">
+        <span class="sms-confirmation-icon" aria-hidden="true">M</span>
+        <div>
+          <h2>Are you sure you want to send this SMS?</h2>
+          <p>Confirm the customer and phone number before using AakashSMS credit.</p>
+        </div>
+      </div>
+
+      <dl class="sms-confirmation-details">
+        <div>
+          <dt>Customer</dt>
+          <dd>{{ credential.customer.full_name }}</dd>
+        </div>
+        <div>
+          <dt>Account</dt>
+          <dd>{{ credential.customer.customer_id }}</dd>
+        </div>
+        <div>
+          <dt>Phone number</dt>
+          <dd>{{ phone_number }}</dd>
+        </div>
+        <div>
+          <dt>Username</dt>
+          <dd>{{ credential.username }}</dd>
+        </div>
+      </dl>
+
+      <div class="sms-message-preview">
+        <strong>Message preview</strong>
+        <p>{{ sms_message }}</p>
+      </div>
+
+      {% if phone_error %}
+        <p class="sms-confirmation-error">{{ phone_error }}</p>
+        <div class="submit-row">
+          <a class="button cancel-link" href="{{ changelist_url }}">Back to E-Banking</a>
+        </div>
+      {% else %}
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="confirm_send" value="yes">
+          <div class="submit-row">
+            <input type="submit" class="default" value="Confirm and send SMS">
+            <a class="button cancel-link" href="{{ changelist_url }}">Cancel</a>
+          </div>
+        </form>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

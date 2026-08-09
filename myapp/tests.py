@@ -1,11 +1,14 @@
 from decimal import Decimal
+from datetime import timedelta
+from unittest.mock import patch
+from urllib.parse import parse_qs
 
 from django.contrib.admin.models import ADDITION, LogEntry
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -14,12 +17,20 @@ from .models import (
     CollectionRecord,
     Customer,
     CustomerKYCDocument,
+    DepositAccount,
+    DepositPayment,
     EBankingCredential,
+    LoanApplication,
+    LoanRepayment,
     RecycleBinItem,
+    SecurityEvent,
+    SMSDelivery,
+    SystemSetting,
     Ticket,
     Transaction,
     WebsitePopup,
 )
+from .sms import send_collection_receipt_sms
 
 
 class AdminInterfaceTests(TestCase):
@@ -48,6 +59,7 @@ class AdminInterfaceTests(TestCase):
         self.assertContains(response, reverse("admin:myapp_banner_changelist"))
         self.assertContains(response, reverse("admin:myapp_notice_changelist"))
         self.assertContains(response, reverse("admin:myapp_reports"))
+        self.assertContains(response, reverse("admin:myapp_calculator"))
         self.assertContains(response, reverse("admin:myapp_recyclebinitem_changelist"))
         self.assertContains(response, 'class="custom-admin-sidebar"')
         self.assertContains(response, "Recent Actions")
@@ -62,6 +74,122 @@ class AdminInterfaceTests(TestCase):
         self.assertContains(response, "Change Password")
         self.assertNotContains(response, "function renderPage(name)")
         self.assertNotContains(response, 'data-page="Customers"')
+
+    def test_calculator_page_renders_cooperative_tools(self):
+        response = self.client.get(reverse("admin:myapp_calculator"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Calculator")
+        self.assertContains(response, "Interest &amp; Maturity")
+        self.assertContains(response, "Recurring Deposit")
+        self.assertContains(response, "Loan EMI")
+        self.assertContains(response, "Loan Balance")
+        self.assertContains(response, 'data-calculator="interest"')
+
+    def test_audit_security_page_renders_security_sections(self):
+        SecurityEvent.objects.create(
+            event_type=SecurityEvent.EventType.LOGIN_FAILED,
+            username="unknown-user",
+            ip_address="127.0.0.1",
+            path="/admin/login/",
+            message="Failed login attempt",
+        )
+
+        response = self.client.get(reverse("admin:myapp_audit_security"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Audit &amp; Security")
+        self.assertContains(response, "Login &amp; Security Events")
+        self.assertContains(response, "Recent Admin Activity")
+        self.assertContains(response, "Staff Permission Review")
+        self.assertContains(response, "unknown-user")
+        self.assertContains(response, reverse("admin:myapp_securityevent_changelist"))
+        self.assertContains(response, reverse("admin:auth_user_changelist"))
+
+    def test_failed_login_creates_security_event(self):
+        self.client.logout()
+
+        response = self.client.post(
+            reverse("admin:login"),
+            {"username": "missing-user", "password": "bad-password"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            SecurityEvent.objects.filter(
+                event_type=SecurityEvent.EventType.LOGIN_FAILED,
+                username="missing-user",
+            ).exists()
+        )
+
+    def test_system_settings_redirects_to_singleton_settings_form(self):
+        response = self.client.get(reverse("admin:myapp_system_settings"), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        setting = SystemSetting.objects.get(pk=1)
+        self.assertRedirects(
+            response,
+            reverse("admin:myapp_systemsetting_change", args=[setting.pk]),
+            fetch_redirect_response=False,
+        )
+        self.assertContains(response, "Company Profile")
+        self.assertContains(response, "Receipt &amp; Bill Settings")
+        self.assertContains(response, "Finance Defaults")
+        self.assertContains(response, "Approval Rules")
+        self.assertContains(response, "Security Settings")
+        self.assertContains(response, "Notification Settings")
+        self.assertContains(response, "Backup &amp; Maintenance")
+
+    def test_system_settings_save_updates_singleton(self):
+        setting = SystemSetting.get_solo()
+        change_url = reverse("admin:myapp_systemsetting_change", args=[setting.pk])
+
+        response = self.client.post(
+            change_url,
+            {
+                "company_name": "Updated Cooperative",
+                "company_address": "Updated Address",
+                "company_phone": "9800000000",
+                "company_email": "info@example.com",
+                "pan_vat_number": "PAN-123",
+                "receipt_prefix": "BILL",
+                "date_format": "d M Y, H:i",
+                "currency_label": "NPR",
+                "customer_signature_label": "Customer Signature",
+                "authorized_signature_label": "Authorized Signature",
+                "default_payment_method": "Cash",
+                "receipt_footer_text": "Receipt footer",
+                "default_saving_interest_rate": "4.00",
+                "default_loan_interest_rate": "12.00",
+                "default_fixed_deposit_rate": "8.00",
+                "default_recurring_deposit_rate": "7.00",
+                "penalty_rate": "1.00",
+                "grace_period_days": "3",
+                "require_manual_collection_datetime_approval": "on",
+                "require_loan_approval": "on",
+                "require_deposit_approval": "on",
+                "approval_threshold_amount": "10000.00",
+                "failed_login_alert_threshold": "5",
+                "session_timeout_minutes": "120",
+                "password_policy_note": "Strong password required.",
+                "allow_staff_profile_uploads": "on",
+                "sms_sender_name": "NANU",
+                "email_sender": "noreply@example.com",
+                "whatsapp_template": "Hello",
+                "sms_receipt_template": "Receipt",
+                "email_receipt_template": "Email receipt",
+                "maintenance_mode": "",
+                "backup_note": "Daily backup",
+                "_save": "Save",
+            },
+            follow=True,
+        )
+        setting.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(setting.company_name, "Updated Cooperative")
+        self.assertEqual(setting.currency_label, "NPR")
+        self.assertEqual(setting.updated_by, self.superuser)
 
     def test_admin_login_page_uses_company_logo_layout(self):
         self.client.logout()
@@ -383,15 +511,16 @@ class AdminInterfaceTests(TestCase):
         self.assertEqual(response.context["collected_total"], Decimal("75.50"))
         self.assertEqual(response.context["account_total"], Decimal("575.50"))
 
-        response = self.client.post(
-            collect_url,
-            {
-                "amount": "24.50",
-                "visit_type": CollectionRecord.VisitType.HOME,
-                "note": "Collected from home",
-            },
-            follow=True,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                collect_url,
+                {
+                    "amount": "24.50",
+                    "visit_type": CollectionRecord.VisitType.HOME,
+                    "note": "Collected from home",
+                },
+                follow=True,
+            )
 
         self.assertEqual(response.status_code, 200)
         new_collection = CollectionRecord.objects.get(note="Collected from home")
@@ -403,6 +532,7 @@ class AdminInterfaceTests(TestCase):
         self.assertEqual(transaction.amount, Decimal("24.50"))
         self.assertEqual(transaction.balance_after, Decimal("600.00"))
         self.assertEqual(transaction.payment_method, "Cash")
+        self.assertEqual(transaction.sms_delivery.status, SMSDelivery.Status.SKIPPED)
         self.assertContains(response, transaction.transaction_id)
         self.assertContains(response, "Print Bill")
         self.assertContains(response, "Download PDF")
@@ -462,6 +592,94 @@ class AdminInterfaceTests(TestCase):
         self.assertEqual(jpg_response["Content-Type"], "image/jpeg")
         self.assertEqual(jpg_response["Content-Disposition"], f'attachment; filename="{transaction.transaction_id}.jpg"')
         self.assertTrue(jpg_response.content.startswith(b"\xff\xd8\xff"))
+
+    @override_settings(
+        SMS_ENABLED=True,
+        AAKASHSMS_AUTH_TOKEN="test-aakash-token",
+        AAKASHSMS_API_URL="https://sms.aakashsms.com/sms/v3/send",
+        AAKASHSMS_TIMEOUT_SECONDS=3,
+    )
+    @patch("myapp.sms.urlopen")
+    def test_aakashsms_collection_receipt_is_queued_once(self, mocked_urlopen):
+        customer = Customer.objects.create(
+            first_name="SMS",
+            last_name="Customer",
+            phone_number="+977 9811111199",
+            address="SMS Road",
+            opening_balance=Decimal("500.00"),
+        )
+        collection = CollectionRecord.objects.create(
+            customer=customer,
+            collected_by=self.superuser,
+            amount=Decimal("75.00"),
+            visit_type=CollectionRecord.VisitType.OFFICE,
+            collected_at=timezone.now(),
+        )
+        transaction = Transaction.objects.create(
+            collection_record=collection,
+            customer=customer,
+            amount=collection.amount,
+            balance_after=Decimal("575.00"),
+            payment_method="Cash",
+            visit_type=collection.visit_type,
+            collected_by=self.superuser,
+            transacted_at=collection.collected_at,
+        )
+        mocked_urlopen.return_value.__enter__.return_value.read.return_value = (
+            b'{"error": false, "message": "1 messages has been queued for delivery.", '
+            b'"data": {"valid": [{"id": 2673160, "mobile": "9779811111199", '
+            b'"status": "queued"}], "invalid": []}}'
+        )
+
+        delivery = send_collection_receipt_sms(transaction.pk)
+        duplicate_delivery = send_collection_receipt_sms(transaction.pk)
+
+        self.assertEqual(delivery.pk, duplicate_delivery.pk)
+        self.assertEqual(delivery.status, SMSDelivery.Status.QUEUED)
+        self.assertEqual(delivery.recipient, "9811111199")
+        self.assertEqual(delivery.provider_reference, "2673160")
+        self.assertEqual(delivery.attempt_count, 1)
+        self.assertEqual(mocked_urlopen.call_count, 1)
+        request = mocked_urlopen.call_args.args[0]
+        request_data = parse_qs(request.data.decode("utf-8"))
+        self.assertEqual(request_data["auth_token"], ["test-aakash-token"])
+        self.assertEqual(request_data["to"], ["9811111199"])
+        self.assertIn(transaction.transaction_id, request_data["text"][0])
+        self.assertNotIn("test-aakash-token", delivery.message)
+
+        admin_response = self.client.get(reverse("admin:myapp_smsdelivery_changelist"))
+        self.assertEqual(admin_response.status_code, 200)
+        self.assertContains(admin_response, transaction.transaction_id)
+        self.assertContains(admin_response, "Queued by AakashSMS")
+
+    @override_settings(
+        SMS_ENABLED=True,
+        AAKASHSMS_AUTH_TOKEN="test-aakash-token",
+        AAKASHSMS_TIMEOUT_SECONDS=3,
+    )
+    @patch("myapp.sms.urlopen")
+    def test_invalid_customer_phone_creates_failed_sms_log(self, mocked_urlopen):
+        customer = Customer.objects.create(
+            first_name="Invalid",
+            last_name="Mobile",
+            phone_number="12345",
+            address="SMS Road",
+        )
+        transaction = Transaction.objects.create(
+            customer=customer,
+            amount=Decimal("10.00"),
+            balance_after=Decimal("10.00"),
+            payment_method="Cash",
+            visit_type=CollectionRecord.VisitType.OFFICE,
+            collected_by=self.superuser,
+            transacted_at=timezone.now(),
+        )
+
+        delivery = send_collection_receipt_sms(transaction.pk)
+
+        self.assertEqual(delivery.status, SMSDelivery.Status.FAILED)
+        self.assertIn("valid 10-digit Nepal mobile number", delivery.last_error)
+        mocked_urlopen.assert_not_called()
 
     def test_accounting_page_shows_transaction_vouchers(self):
         customer = Customer.objects.create(
@@ -558,6 +776,274 @@ class AdminInterfaceTests(TestCase):
         dashboard_response = self.client.get(reverse("admin:index"))
         self.assertContains(dashboard_response, reverse("admin:myapp_approvals"))
 
+    def test_manual_collection_datetime_is_counted_and_sent_for_approval(self):
+        customer = Customer.objects.create(
+            first_name="Manual",
+            last_name="Collection",
+            phone_number="9811111166",
+            address="Manual Road",
+            opening_balance=Decimal("1000.00"),
+        )
+        manual_collected_at = timezone.localtime(timezone.now() - timedelta(days=2)).replace(second=0, microsecond=0)
+        collect_url = reverse("admin:myapp_dailycollection_collect", args=[customer.pk])
+
+        response = self.client.post(
+            collect_url,
+            {
+                "amount": "150.00",
+                "visit_type": CollectionRecord.VisitType.SHOP,
+                "use_manual_collected_at": "on",
+                "manual_collected_at": manual_collected_at.strftime("%Y-%m-%dT%H:%M"),
+                "note": "Manual date request",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        collection = CollectionRecord.objects.get(note="Manual date request")
+        self.assertEqual(collection.amount, Decimal("150.00"))
+        self.assertTrue(collection.collected_at_was_manual)
+        self.assertEqual(collection.datetime_approval_status, CollectionRecord.DateTimeApprovalStatus.PENDING)
+        self.assertIsNotNone(collection.datetime_approval_requested_at)
+        self.assertEqual(collection.transaction.amount, Decimal("150.00"))
+        self.assertEqual(collection.transaction.balance_after, Decimal("1150.00"))
+
+        approvals_response = self.client.get(reverse("admin:myapp_approvals"))
+        self.assertContains(approvals_response, "Manual Collection Date/Time Requests")
+        self.assertContains(approvals_response, "Manual Collection")
+        self.assertContains(approvals_response, "Rs 150.00")
+
+        response = self.client.post(
+            reverse("admin:myapp_approvals"),
+            {"action": "approve_collection_datetime", "object_id": collection.pk},
+            follow=True,
+        )
+        collection.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(collection.datetime_approval_status, CollectionRecord.DateTimeApprovalStatus.APPROVED)
+        self.assertEqual(collection.datetime_approved_by, self.superuser)
+        self.assertIsNotNone(collection.datetime_approved_at)
+
+    def test_online_collection_requires_reference_and_stores_receipt(self):
+        customer = Customer.objects.create(
+            first_name="Online",
+            last_name="Payment",
+            phone_number="9811111177",
+            address="Online Road",
+            opening_balance=Decimal("700.00"),
+        )
+        collect_url = reverse("admin:myapp_dailycollection_collect", args=[customer.pk])
+
+        missing_reference_response = self.client.post(
+            collect_url,
+            {
+                "amount": "80.00",
+                "visit_type": CollectionRecord.VisitType.OFFICE,
+                "payment_method": CollectionRecord.PaymentMethod.ONLINE,
+                "note": "Missing online reference",
+            },
+        )
+
+        self.assertEqual(missing_reference_response.status_code, 200)
+        self.assertContains(missing_reference_response, "Enter the online reference number or transaction ID.")
+
+        receipt = SimpleUploadedFile("receipt.jpg", b"receipt-proof", content_type="image/jpeg")
+        response = self.client.post(
+            collect_url,
+            {
+                "amount": "80.00",
+                "visit_type": CollectionRecord.VisitType.OFFICE,
+                "payment_method": CollectionRecord.PaymentMethod.ONLINE,
+                "payment_reference": "ESEWA-12345",
+                "payment_receipt": receipt,
+                "note": "Online payment",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        collection = CollectionRecord.objects.get(note="Online payment")
+        transaction = collection.transaction
+        self.assertEqual(collection.payment_method, CollectionRecord.PaymentMethod.ONLINE)
+        self.assertEqual(collection.payment_reference, "ESEWA-12345")
+        self.assertTrue(collection.payment_receipt.name)
+        self.assertEqual(transaction.payment_method, "Online")
+        self.assertEqual(transaction.payment_reference, "ESEWA-12345")
+        self.assertTrue(transaction.payment_receipt.name)
+        self.assertContains(response, "ESEWA-12345")
+
+    def test_loan_management_lists_approves_and_tracks_repayments(self):
+        customer = Customer.objects.create(
+            first_name="Loan",
+            last_name="Customer",
+            phone_number="9811111188",
+            address="Loan Road",
+        )
+        loan = LoanApplication.objects.create(
+            customer=customer,
+            requested_amount=Decimal("5000.00"),
+            interest_rate=Decimal("12.00"),
+            duration_months=10,
+            purpose="Business expansion",
+            first_due_date=timezone.localdate() - timedelta(days=3),
+            status=LoanApplication.Status.PENDING,
+        )
+
+        response = self.client.get(reverse("admin:myapp_loanapplication_changelist"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Loan Customer")
+        self.assertContains(response, "Pending Approval")
+
+        approvals_response = self.client.get(reverse("admin:myapp_approvals"))
+        self.assertContains(approvals_response, "Loan Approval Requests")
+        self.assertContains(approvals_response, "Business expansion")
+
+        response = self.client.post(
+            reverse("admin:myapp_approvals"),
+            {"action": "approve_loan", "object_id": loan.pk},
+            follow=True,
+        )
+        loan.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(loan.status, LoanApplication.Status.APPROVED)
+        self.assertEqual(loan.approved_amount, Decimal("5000.00"))
+        self.assertEqual(loan.approved_by, self.superuser)
+        self.assertEqual(loan.outstanding_amount, Decimal("5000.00"))
+        self.assertTrue(loan.is_overdue)
+
+        missing_reference_response = self.client.post(
+            reverse("admin:myapp_loanrepayment_add"),
+            {
+                "loan": loan.pk,
+                "amount": "1000.00",
+                "payment_method": LoanRepayment.PaymentMethod.ONLINE,
+                "paid_at_0": timezone.localdate().strftime("%Y-%m-%d"),
+                "paid_at_1": "10:00:00",
+            },
+        )
+        self.assertEqual(missing_reference_response.status_code, 200)
+        self.assertContains(missing_reference_response, "Enter the online reference number or transaction ID.")
+
+        receipt = SimpleUploadedFile("loan-receipt.jpg", b"loan-proof", content_type="image/jpeg")
+        response = self.client.post(
+            reverse("admin:myapp_loanrepayment_add"),
+            {
+                "loan": loan.pk,
+                "amount": "1000.00",
+                "payment_method": LoanRepayment.PaymentMethod.ONLINE,
+                "payment_reference": "LOANPAY-01",
+                "payment_receipt": receipt,
+                "paid_at_0": timezone.localdate().strftime("%Y-%m-%d"),
+                "paid_at_1": "10:00:00",
+                "note": "First loan repayment",
+            },
+            follow=True,
+        )
+        loan.refresh_from_db()
+        repayment = LoanRepayment.objects.get(note="First loan repayment")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(repayment.collected_by, self.superuser)
+        self.assertEqual(loan.outstanding_amount, Decimal("4000.00"))
+
+        dashboard_response = self.client.get(reverse("admin:index"))
+        self.assertContains(dashboard_response, "Loan Outstanding")
+        self.assertContains(dashboard_response, "4,000")
+
+    def test_fixed_recurring_deposit_approval_and_payment_flow(self):
+        customer = Customer.objects.create(
+            first_name="Deposit",
+            last_name="Customer",
+            phone_number="9811111199",
+            address="Deposit Road",
+        )
+        deposit = DepositAccount.objects.create(
+            customer=customer,
+            deposit_type=DepositAccount.DepositType.FIXED,
+            principal_amount=Decimal("10000.00"),
+            interest_rate=Decimal("8.00"),
+            tenure_months=12,
+            interest_payout=DepositAccount.InterestPayout.MATURITY,
+            start_date=timezone.localdate(),
+            maturity_date=timezone.localdate() + timedelta(days=5),
+            status=DepositAccount.Status.PENDING,
+        )
+
+        response = self.client.get(reverse("admin:myapp_depositaccount_changelist"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Deposit Customer")
+        self.assertContains(response, "Pending Approval")
+
+        approvals_response = self.client.get(reverse("admin:myapp_approvals"))
+        self.assertContains(approvals_response, "Fixed / Recurring Deposit Requests")
+        self.assertContains(approvals_response, "Deposit Customer")
+
+        response = self.client.post(
+            reverse("admin:myapp_approvals"),
+            {"action": "approve_deposit", "object_id": deposit.pk},
+            follow=True,
+        )
+        deposit.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(deposit.status, DepositAccount.Status.ACTIVE)
+        self.assertEqual(deposit.approved_by, self.superuser)
+        self.assertTrue(deposit.is_maturing_soon)
+        self.assertEqual(deposit.maturity_amount, Decimal("10800.00"))
+
+        recurring = DepositAccount.objects.create(
+            customer=customer,
+            deposit_type=DepositAccount.DepositType.RECURRING,
+            principal_amount=Decimal("0.00"),
+            installment_amount=Decimal("500.00"),
+            interest_rate=Decimal("6.00"),
+            tenure_months=12,
+            start_date=timezone.localdate(),
+            next_due_date=timezone.localdate() - timedelta(days=1),
+            maturity_date=timezone.localdate() + timedelta(days=365),
+            status=DepositAccount.Status.ACTIVE,
+        )
+
+        missing_reference_response = self.client.post(
+            reverse("admin:myapp_depositpayment_add"),
+            {
+                "deposit": recurring.pk,
+                "amount": "500.00",
+                "payment_method": DepositPayment.PaymentMethod.ONLINE,
+                "paid_at_0": timezone.localdate().strftime("%Y-%m-%d"),
+                "paid_at_1": "10:00:00",
+            },
+        )
+        self.assertEqual(missing_reference_response.status_code, 200)
+        self.assertContains(missing_reference_response, "Enter the online reference number or transaction ID.")
+
+        receipt = SimpleUploadedFile("deposit-receipt.jpg", b"deposit-proof", content_type="image/jpeg")
+        response = self.client.post(
+            reverse("admin:myapp_depositpayment_add"),
+            {
+                "deposit": recurring.pk,
+                "amount": "500.00",
+                "payment_method": DepositPayment.PaymentMethod.ONLINE,
+                "payment_reference": "DEP-ONLINE-01",
+                "payment_receipt": receipt,
+                "paid_at_0": timezone.localdate().strftime("%Y-%m-%d"),
+                "paid_at_1": "10:00:00",
+                "note": "Recurring installment",
+            },
+            follow=True,
+        )
+        payment = DepositPayment.objects.get(note="Recurring installment")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payment.collected_by, self.superuser)
+        self.assertEqual(recurring.total_paid, Decimal("500.00"))
+
+        dashboard_response = self.client.get(reverse("admin:index"))
+        self.assertContains(dashboard_response, reverse("admin:myapp_depositaccount_changelist"))
+        self.assertContains(dashboard_response, "Fixed deposits maturing")
+
     def test_customer_form_contains_add_document_inline(self):
         response = self.client.get(reverse("admin:myapp_customer_add"))
 
@@ -617,9 +1103,10 @@ class AdminInterfaceTests(TestCase):
         self.assertFalse(customer.user.is_superuser)
         credential = customer.ebanking_credential
         self.assertEqual(credential.username, customer.customer_id.lower())
-        self.assertTrue(credential.temporary_password)
+        self.assertEqual(credential.temporary_password, "")
         self.assertContains(response, "Customer login created.")
         self.assertContains(response, "Password:")
+        self.assertContains(response, "it is not stored")
 
         response = self.client.get(reverse("admin:myapp_customer_change", args=[customer.pk]))
         self.assertContains(response, "Profile photo")
@@ -657,7 +1144,7 @@ class AdminInterfaceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Portal Customer")
         self.assertContains(response, customer.customer_id)
-        self.assertContains(response, "Rs 1280.00")
+        self.assertContains(response, "Rs 1,280.00")
 
         response = self.client.post(
             reverse("customer_create_ticket"),
@@ -767,9 +1254,153 @@ class AdminInterfaceTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         credential = EBankingCredential.objects.get(customer=customer)
-        self.assertEqual(credential.temporary_password, "ResetPass@12345")
+        self.assertEqual(credential.temporary_password, "")
         self.client.logout()
         self.assertTrue(self.client.login(username="reset-customer", password="ResetPass@12345"))
+
+    @override_settings(
+        SMS_ENABLED=True,
+        AAKASHSMS_AUTH_TOKEN="test-aakash-token",
+        AAKASHSMS_API_URL="https://sms.aakashsms.com/sms/v3/send",
+        AAKASHSMS_TIMEOUT_SECONDS=3,
+    )
+    @patch("myapp.sms.urlopen")
+    def test_admin_can_reset_and_send_temporary_password_without_storing_it(self, mocked_urlopen):
+        customer_user = get_user_model().objects.create_user(
+            username="reset-sms-customer",
+            password="OldPass@123",
+        )
+        customer = Customer.objects.create(
+            user=customer_user,
+            first_name="Reset SMS",
+            last_name="Customer",
+            phone_number="+977 9844444499",
+            address="Reset Road",
+        )
+        credential = EBankingCredential.objects.create(
+            customer=customer,
+            user=customer_user,
+            username="reset-sms-customer",
+            password_changed_at=timezone.now(),
+        )
+        temporary_password = "SmsTemp@12345"
+        mocked_urlopen.return_value.__enter__.return_value.read.return_value = (
+            b'{"error": false, "message": "1 messages has been queued for delivery.", '
+            b'"data": {"valid": [{"id": 2674001, "mobile": "9779844444499", '
+            b'"text": "SmsTemp@12345", "status": "queued"}], "invalid": []}}'
+        )
+
+        response = self.client.post(
+            reverse("admin:myapp_customer_reset_password", args=[customer.pk]),
+            {
+                "new_password1": temporary_password,
+                "new_password2": temporary_password,
+                "send_password_sms": "yes",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "temporary password queued by AakashSMS for 9844444499")
+        self.assertNotContains(response, temporary_password)
+        customer_user.refresh_from_db()
+        credential.refresh_from_db()
+        self.assertTrue(customer_user.check_password(temporary_password))
+        self.assertIsNone(credential.password_changed_at)
+        self.assertEqual(credential.temporary_password, "")
+        delivery = SMSDelivery.objects.get(
+            customer=customer,
+            event_type=SMSDelivery.EventType.TEMPORARY_PASSWORD,
+        )
+        self.assertEqual(delivery.status, SMSDelivery.Status.QUEUED)
+        self.assertIn("[REDACTED]", delivery.message)
+        self.assertNotIn(temporary_password, delivery.message)
+        self.assertNotIn(temporary_password, str(delivery.provider_response))
+        request_data = parse_qs(mocked_urlopen.call_args.args[0].data.decode("utf-8"))
+        self.assertIn(temporary_password, request_data["text"][0])
+
+    @override_settings(
+        SMS_ENABLED=True,
+        AAKASHSMS_AUTH_TOKEN="test-aakash-token",
+        AAKASHSMS_TIMEOUT_SECONDS=3,
+    )
+    @patch("myapp.sms.urlopen")
+    def test_invalid_phone_prevents_password_reset_and_sms(self, mocked_urlopen):
+        customer_user = get_user_model().objects.create_user(
+            username="invalid-reset-sms",
+            password="OldPass@123",
+        )
+        customer = Customer.objects.create(
+            user=customer_user,
+            first_name="Invalid Reset",
+            last_name="Customer",
+            phone_number="12345",
+            address="Reset Road",
+        )
+        EBankingCredential.objects.create(
+            customer=customer,
+            user=customer_user,
+            username="invalid-reset-sms",
+            password_changed_at=timezone.now(),
+        )
+
+        response = self.client.post(
+            reverse("admin:myapp_customer_reset_password", args=[customer.pk]),
+            {
+                "new_password1": "NewTemp@12345",
+                "new_password2": "NewTemp@12345",
+                "send_password_sms": "yes",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "not a valid 10-digit Nepal mobile number")
+        customer_user.refresh_from_db()
+        self.assertTrue(customer_user.check_password("OldPass@123"))
+        mocked_urlopen.assert_not_called()
+        self.assertFalse(SMSDelivery.objects.filter(customer=customer).exists())
+
+    def test_temporary_password_customer_must_change_password_before_dashboard(self):
+        customer_user = get_user_model().objects.create_user(
+            username="must-change-customer",
+            password="TempPass@123",
+        )
+        customer = Customer.objects.create(
+            user=customer_user,
+            first_name="Must Change",
+            last_name="Customer",
+            phone_number="9844444400",
+            address="Password Road",
+        )
+        EBankingCredential.objects.create(
+            customer=customer,
+            user=customer_user,
+            username="must-change-customer",
+            password_changed_at=None,
+        )
+        self.client.logout()
+
+        login_response = self.client.post(
+            reverse("customer_login"),
+            {"username": "must-change-customer", "password": "TempPass@123"},
+        )
+        self.assertRedirects(login_response, reverse("customer_change_password"))
+        dashboard_response = self.client.get(reverse("customer_dashboard"))
+        self.assertRedirects(dashboard_response, reverse("customer_change_password"))
+        change_page = self.client.get(reverse("customer_change_password"))
+        self.assertContains(change_page, "change the temporary password before continuing")
+
+        changed_response = self.client.post(
+            reverse("customer_change_password"),
+            {
+                "old_password": "TempPass@123",
+                "new_password1": "PermanentPass@12345",
+                "new_password2": "PermanentPass@12345",
+            },
+        )
+        self.assertRedirects(changed_response, reverse("customer_dashboard"))
+        customer.ebanking_credential.refresh_from_db()
+        self.assertIsNotNone(customer.ebanking_credential.password_changed_at)
 
     def test_ebanking_admin_lists_customer_credentials(self):
         customer_user = get_user_model().objects.create_user(
@@ -788,7 +1419,7 @@ class AdminInterfaceTests(TestCase):
             customer=customer,
             user=customer_user,
             username="ebanking-customer",
-            temporary_password="TempPass@123",
+            temporary_password="",
         )
 
         response = self.client.get(reverse("admin:myapp_ebankingcredential_changelist"))
@@ -798,10 +1429,110 @@ class AdminInterfaceTests(TestCase):
         self.assertContains(response, "9844444477")
         self.assertContains(response, "ebanking@example.com")
         self.assertContains(response, "ebanking-customer")
-        self.assertContains(response, "TempPass@123")
+        self.assertContains(response, "raw password is not stored")
         self.assertContains(response, "Send Email")
         self.assertContains(response, "Send SMS")
+        self.assertContains(response, "Reset &amp; SMS Password", html=True)
         self.assertContains(response, "Call")
+        send_sms_url = reverse("admin:myapp_ebankingcredential_send_sms", args=[customer.ebanking_credential.pk])
+        self.assertContains(response, send_sms_url)
+        self.assertNotContains(response, 'href="sms:')
+
+        confirmation_response = self.client.get(send_sms_url)
+        self.assertEqual(confirmation_response.status_code, 200)
+        self.assertContains(confirmation_response, "Are you sure you want to send this SMS?")
+        self.assertContains(confirmation_response, "9844444477")
+        self.assertContains(confirmation_response, "Confirm and send SMS")
+
+    @override_settings(
+        SMS_ENABLED=True,
+        AAKASHSMS_AUTH_TOKEN="test-aakash-token",
+        AAKASHSMS_API_URL="https://sms.aakashsms.com/sms/v3/send",
+        AAKASHSMS_TIMEOUT_SECONDS=3,
+    )
+    @patch("myapp.sms.urlopen")
+    def test_confirmed_ebanking_sms_is_sent_directly_with_aakashsms(self, mocked_urlopen):
+        customer_user = get_user_model().objects.create_user(
+            username="sms-login-customer",
+            password="TempPass@123",
+        )
+        customer = Customer.objects.create(
+            user=customer_user,
+            first_name="SMS Login",
+            last_name="Customer",
+            phone_number="+977 9844444488",
+            address="Ebanking Road",
+        )
+        credential = EBankingCredential.objects.create(
+            customer=customer,
+            user=customer_user,
+            username="sms-login-customer",
+        )
+        mocked_urlopen.return_value.__enter__.return_value.read.return_value = (
+            b'{"error": false, "message": "1 messages has been queued for delivery.", '
+            b'"data": {"valid": [{"id": 2673999, "mobile": "9779844444488", '
+            b'"status": "queued"}], "invalid": []}}'
+        )
+
+        response = self.client.post(
+            reverse("admin:myapp_ebankingcredential_send_sms", args=[credential.pk]),
+            {"confirm_send": "yes"},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "SMS queued by AakashSMS for 9844444488")
+        delivery = SMSDelivery.objects.get(
+            customer=customer,
+            event_type=SMSDelivery.EventType.EBANKING_LOGIN,
+        )
+        self.assertEqual(delivery.status, SMSDelivery.Status.QUEUED)
+        self.assertEqual(delivery.provider_reference, "2673999")
+        request_data = parse_qs(mocked_urlopen.call_args.args[0].data.decode("utf-8"))
+        self.assertEqual(request_data["to"], ["9844444488"])
+        self.assertIn("Username: sms-login-customer", request_data["text"][0])
+        self.assertNotIn("TempPass@123", request_data["text"][0])
+
+    @override_settings(
+        SMS_ENABLED=True,
+        AAKASHSMS_AUTH_TOKEN="test-aakash-token",
+        AAKASHSMS_TIMEOUT_SECONDS=3,
+    )
+    @patch("myapp.sms.urlopen")
+    def test_ebanking_sms_rejects_invalid_customer_phone(self, mocked_urlopen):
+        customer_user = get_user_model().objects.create_user(
+            username="invalid-sms-login",
+            password="TempPass@123",
+        )
+        customer = Customer.objects.create(
+            user=customer_user,
+            first_name="Invalid SMS",
+            last_name="Customer",
+            phone_number="12345",
+            address="Ebanking Road",
+        )
+        credential = EBankingCredential.objects.create(
+            customer=customer,
+            user=customer_user,
+            username="invalid-sms-login",
+        )
+        send_sms_url = reverse("admin:myapp_ebankingcredential_send_sms", args=[credential.pk])
+
+        confirmation_response = self.client.get(send_sms_url)
+        self.assertEqual(confirmation_response.status_code, 200)
+        self.assertContains(
+            confirmation_response,
+            "Sorry, this customer phone number is incorrect or is not a valid Nepal mobile number.",
+        )
+        self.assertNotContains(confirmation_response, "Confirm and send SMS")
+
+        response = self.client.post(send_sms_url, {"confirm_send": "yes"}, follow=True)
+        self.assertContains(
+            response,
+            "Sorry, this customer phone number is incorrect or is not a valid Nepal mobile number.",
+        )
+        mocked_urlopen.assert_not_called()
+        self.assertFalse(SMSDelivery.objects.filter(customer=customer).exists())
 
     def test_ticket_admin_assignment_completion_and_verification_flow(self):
         staff_user = get_user_model().objects.create_user(
