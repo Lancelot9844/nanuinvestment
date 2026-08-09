@@ -10,6 +10,7 @@
 {% block extrahead %}
 {{ block.super }}
 <script src="{% static 'admin/js/sidebar-state.js' %}" defer></script>
+<script src="{% static 'admin/js/profile-menu.js' %}" defer></script>
 {% endblock %}
 
 {% block branding %}
@@ -47,33 +48,53 @@
 
   <details class="admin-profile-menu">
     <summary>
-      <span class="admin-profile-photo">
-        {% if request.user.admin_profile.photo %}
-          <img src="{{ request.user.admin_profile.photo.url }}" alt="">
-        {% else %}
-          {{ request.user.username|default:"A"|first|upper }}
-        {% endif %}
-      </span>
-      <span class="admin-profile-text">
-        <strong>{{ request.user.get_full_name|default:request.user.username|default:"Admin" }}</strong>
-        <span>{% if request.user.is_superuser %}Super Admin{% elif request.user.is_staff %}Staff{% else %}User{% endif %}</span>
-      </span>
+        <span class="admin-profile-photo">
+            {% if request.user.admin_profile.photo %}
+                <img src="{{ request.user.admin_profile.photo.url }}" alt="">
+            {% else %}
+                {{ request.user.username|default:"A"|first|upper }}
+            {% endif %}
+        </span>
+
+        <span class="admin-profile-text">
+            <strong>
+                {{ request.user.get_full_name|default:request.user.username|default:"Admin" }}
+            </strong>
+
+            <span>
+                {% if request.user.is_superuser %}
+                    Super Admin
+                {% elif request.user.is_staff %}
+                    Staff
+                {% else %}
+                    User
+                {% endif %}
+            </span>
+        </span>
     </summary>
+
     <div class="admin-profile-dropdown">
-      {% url 'admin:myapp_staff_profile_settings' as profile_url %}
-      <a href="{{ profile_url }}">Profile Settings</a>
-      {% if site_url %}
-        <a href="{{ site_url }}">Visit Website</a>
-      {% endif %}
-      {% if user.has_usable_password %}
-        <a href="{% url 'admin:password_change' %}">Change Password</a>
-      {% endif %}
-      <form id="logout-form" method="post" action="{% url 'admin:logout' %}">
-        {% csrf_token %}
-        <button type="submit">Log Out</button>
-      </form>
+        {% url 'admin:myapp_staff_profile_settings' as profile_url %}
+
+        <a href="{{ profile_url }}">Profile Settings</a>
+
+        {% if site_url %}
+            <a href="{{ site_url }}">Visit Website</a>
+        {% endif %}
+
+        {% if user.has_usable_password %}
+            <a href="{% url 'admin:password_change' %}">
+                Change Password
+            </a>
+        {% endif %}
+
+        <form id="logout-form" method="post" action="{% url 'admin:logout' %}">
+            {% csrf_token %}
+            <button type="submit">Log Out</button>
+        </form>
     </div>
-  </details>
+</details>
+
 </div>
 {% endblock %}
 

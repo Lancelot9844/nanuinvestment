@@ -79,6 +79,7 @@ a:hover {
   top: 0;
   z-index: 1000;
   display: flex;
+  overflow: visible;
   align-items: center;
   justify-content: space-between;
   background: var(--white);
@@ -173,6 +174,7 @@ a:hover {
   align-items: center;
   gap: 12px;
   position: relative;
+  overflow: visible;
 }
 
 .admin-header-links form {
@@ -298,17 +300,24 @@ html[data-theme="dark"] .theme-dark-label {
 }
 
 .admin-profile-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+
   width: 220px;
   padding: 8px;
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 60;
+
   display: none;
+
+  box-sizing: border-box;
+
   border: 1px solid var(--line);
   border-radius: 12px;
+
   background: var(--white);
   box-shadow: var(--shadow);
+
+  z-index: 1000;
 }
 
 .admin-profile-menu[open] .admin-profile-dropdown {
@@ -322,13 +331,14 @@ html[data-theme="dark"] .theme-dark-label {
   width: 100%;
   min-height: 38px;
   padding: 9px 10px !important;
-  display: flex;
+  display: block;
   align-items: center;
   border: 0 !important;
   border-radius: 8px;
   background: transparent;
   color: var(--ink) !important;
   text-align: left;
+  cursor: pointer;
   text-decoration: none !important;
   text-transform: none !important;
   font: inherit;
@@ -2894,7 +2904,7 @@ div.breadcrumbs a {
   gap: 8px;
 }
 
-.object-tools {
+.object-tools {.admin-profile-menu
   justify-content: flex-end;
 }
 
@@ -2997,6 +3007,7 @@ form .aligned div.help {
   height: 100vh;
   max-height: 100vh;
   position: fixed;
+  margin-top:148px;
   top: 0;
   right: 0;
   z-index: 60;
@@ -3449,10 +3460,11 @@ html[data-theme="dark"] .admin-activity-item {
 
   #branding {
     display: flex;
+    justify-content: left;
     align-items: center;
     min-width: 0;
     gap: 10px;
-  }
+}
   
  
   #branding .brand {
@@ -3519,6 +3531,15 @@ html[data-theme="dark"] .admin-activity-item {
   .admin-profile-menu summary {
     padding-right: 7px;
   }
+
+  .admin-profile-menu > summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+.admin-profile-menu > summary::-webkit-details-marker {
+    display: none;
+}
 
   .admin-profile-text {
     display: none;
@@ -3852,6 +3873,10 @@ html[data-theme="dark"] .admin-activity-item {
 @media (max-width: 480px) {
 
   #branding {
+    display: flex;
+    justify-content: left;
+    align-items: center;
+    min-width: 0;
     gap: 5px;
 }
 
@@ -3933,8 +3958,17 @@ html[data-theme="dark"] .admin-activity-item {
   }
 
   .brand {
-    align-items: flex-start;
-  }
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+}
+
+.brand-wrap {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
 
   .staff {
     align-items: flex-start;
