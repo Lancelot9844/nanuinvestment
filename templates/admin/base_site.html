@@ -13,13 +13,24 @@
 {% endblock %}
 
 {% block branding %}
+
+<div class="brand">
+  <a href="/admin/">
+    <img
+      class="brand-mark"
+      src="{% static 'company_logo.png' %}"
+      alt="Nanu Investment logo"
+    >
+  </a>
+</div>
+
 <div class="brand-wrap">
   {% if perms.auth.view_user %}
     <form class="admin-top-search" action="{% url 'admin:auth_user_changelist' %}" method="get">
       <input type="search" name="q" placeholder="Search users..." aria-label="Search users">
     </form>
   {% else %}
-    <div class="admin-top-search admin-top-search-static">NanuInvestment Admin</div>
+    <div class="admin-top-search admin-top-search-static">Nanu Investment Admin</div>
   {% endif %}
 </div>
 {% endblock %}

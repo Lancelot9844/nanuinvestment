@@ -9,101 +9,85 @@
 <label class="admin-sidebar-backdrop" for="admin-sidebar-check" aria-label="Close admin menu"></label>
 
 <aside class="custom-admin-sidebar" aria-label="Admin navigation">
-  <div class="brand">
-    <img class="brand-mark" src="{% static 'admin-logo.png' %}" alt="Nanu Investment logo">
-    <div>
-      <b>NanuInvestment</b>
-      <small>Financial Management</small>
-    </div>
-    <label class="admin-sidebar-close" for="admin-sidebar-check" aria-label="Close admin menu">x</label>
-  </div>
+  <label class="admin-sidebar-close" for="admin-sidebar-check" aria-label="Close admin menu">&times;</label>
 
   <div class="nav-label">MAIN MENU</div>
   <nav class="sidebar-menu">
     {% url 'admin:index' as dashboard_url %}
-    <a class="{% if request.path == dashboard_url %}active{% endif %}" href="{{ dashboard_url }}"><i>#</i><span>Dashboard</span></a>
+    <a class="{% if request.path == dashboard_url %}active{% endif %}" href="{{ dashboard_url }}"><span>Dashboard</span></a>
     {% if perms.myapp.view_customer %}
       {% url 'admin:myapp_customer_changelist' as customers_url %}
-      <a class="{% if customers_url in request.path %}active{% endif %}" href="{{ customers_url }}"><i>C</i><span>Customers &amp; KYC</span></a>
+      <a class="{% if customers_url in request.path %}active{% endif %}" href="{{ customers_url }}"><span>Customers &amp; KYC</span></a>
     {% endif %}
     {% if perms.myapp.view_ebankingcredential %}
       {% url 'admin:myapp_ebankingcredential_changelist' as ebanking_url %}
-      <a class="{% if ebanking_url in request.path %}active{% endif %}" href="{{ ebanking_url }}"><i>E</i><span>E-Banking</span></a>
+      <a class="{% if ebanking_url in request.path %}active{% endif %}" href="{{ ebanking_url }}"><span>E-Banking</span></a>
     {% endif %}
-    <a href="{{ dashboard_url }}#saving-accounts"><i>S</i><span>Saving Accounts</span></a>
+    <a href="{{ dashboard_url }}#saving-accounts"><span>Saving Accounts</span></a>
     {% if perms.myapp.view_dailycollection %}
       {% url 'admin:myapp_dailycollection_changelist' as daily_collections_url %}
-      <a class="{% if daily_collections_url in request.path %}active{% endif %}" href="{{ daily_collections_url }}"><i>D</i><span>Daily Collections</span></a>
+      <a class="{% if daily_collections_url in request.path %}active{% endif %}" href="{{ daily_collections_url }}"><span>Daily Collections</span></a>
     {% endif %}
-    <a href="{{ dashboard_url }}#loan-management"><i>L</i><span>Loan Management</span></a>
-    <a href="{{ dashboard_url }}#fixed-recurring-deposit"><i>F</i><span>Fixed / Recurring Deposit</span></a>
+    <a href="{{ dashboard_url }}#loan-management"><span>Loan Management</span></a>
+    <a href="{{ dashboard_url }}#fixed-recurring-deposit"><span>Fixed / Recurring Deposit</span></a>
     {% if perms.myapp.view_ticket %}
       {% url 'admin:myapp_ticket_changelist' as tickets_url %}
-      <a class="{% if tickets_url in request.path %}active{% endif %}" href="{{ tickets_url }}"><i>T</i><span>Ticket Created</span></a>
+      <a class="{% if tickets_url in request.path %}active{% endif %}" href="{{ tickets_url }}"><span>Ticket Created</span></a>
     {% endif %}
 
     <div class="nav-label">FINANCE &amp; CONTROL</div>
     {% if perms.myapp.view_transaction %}
       {% url 'admin:myapp_transaction_changelist' as transactions_url %}
-      <a class="{% if transactions_url in request.path %}active{% endif %}" href="{{ transactions_url }}"><i>X</i><span>Transactions</span></a>
+      <a class="{% if transactions_url in request.path %}active{% endif %}" href="{{ transactions_url }}"><span>Transactions</span></a>
     {% endif %}
-    <a href="{{ dashboard_url }}#cash-bank"><i>$</i><span>Cash &amp; Bank</span></a>
+    <a href="{{ dashboard_url }}#cash-bank"><span>Cash &amp; Bank</span></a>
     {% url 'admin:myapp_accounting' as accounting_url %}
-    <a class="{% if request.path == accounting_url %}active{% endif %}" href="{{ accounting_url }}"><i>A</i><span>Accounting</span></a>
+    <a class="{% if request.path == accounting_url %}active{% endif %}" href="{{ accounting_url }}"><span>Accounting</span></a>
     {% url 'admin:myapp_approvals' as approvals_url %}
-    <a class="{% if request.path == approvals_url %}active{% endif %}" href="{{ approvals_url }}"><i>✓</i><span>Approvals</span></a>
-    <a href="{% url 'admin:myapp_reports' %}"><i>R</i><span>Reports</span></a>
+    <a class="{% if request.path == approvals_url %}active{% endif %}" href="{{ approvals_url }}"><span>Approvals</span></a>
+    <a href="{% url 'admin:myapp_reports' %}"><span>Reports</span></a>
 
     <div class="nav-label">WEBSITE CONTENT</div>
     {% if perms.myapp.view_banner %}
       {% url 'admin:myapp_banner_changelist' as banners_url %}
-      <a class="{% if banners_url in request.path %}active{% endif %}" href="{{ banners_url }}"><i>B</i><span>Banners</span></a>
+      <a class="{% if banners_url in request.path %}active{% endif %}" href="{{ banners_url }}"><span>Banners</span></a>
     {% endif %}
 
     {% if perms.myapp.view_newsactivity %}
       {% url 'admin:myapp_newsactivity_changelist' as news_url %}
-      <a class="{% if news_url in request.path %}active{% endif %}" href="{{ news_url }}"><i>N</i><span>News &amp; Activities</span></a>
+      <a class="{% if news_url in request.path %}active{% endif %}" href="{{ news_url }}"><span>News &amp; Activities</span></a>
     {% endif %}
 
     {% if perms.myapp.view_notice %}
       {% url 'admin:myapp_notice_changelist' as notices_url %}
-      <a class="{% if notices_url in request.path %}active{% endif %}" href="{{ notices_url }}"><i>!</i><span>Notices</span></a>
+      <a class="{% if notices_url in request.path %}active{% endif %}" href="{{ notices_url }}"><span>Notices</span></a>
     {% endif %}
 
     {% if perms.myapp.view_download %}
       {% url 'admin:myapp_download_changelist' as downloads_url %}
-      <a class="{% if downloads_url in request.path %}active{% endif %}" href="{{ downloads_url }}"><i>D</i><span>Downloads</span></a>
+      <a class="{% if downloads_url in request.path %}active{% endif %}" href="{{ downloads_url }}"><span>Downloads</span></a>
     {% endif %}
     {% if perms.myapp.view_websitepopup %}
       {% url 'admin:myapp_websitepopup_changelist' as popups_url %}
-      <a class="{% if popups_url in request.path %}active{% endif %}" href="{{ popups_url }}"><i>P</i><span>Website Popups</span></a>
+      <a class="{% if popups_url in request.path %}active{% endif %}" href="{{ popups_url }}"><span>Website Popups</span></a>
     {% endif %}
 
     <div class="nav-label">ADMINISTRATION</div>
     {% url 'admin:myapp_recent_actions' as recent_actions_url %}
-    <a class="{% if request.path == recent_actions_url %}active{% endif %}" href="{{ recent_actions_url }}"><i>H</i><span>Recent Actions</span></a>
+    <a class="{% if request.path == recent_actions_url %}active{% endif %}" href="{{ recent_actions_url }}"><span>Recent Actions</span></a>
     {% if perms.auth.view_user %}
       {% url 'admin:auth_user_changelist' as users_url %}
-      <a class="{% if users_url in request.path %}active{% endif %}" href="{{ users_url }}"><i>E</i><span>Employees &amp; Collectors</span></a>
+      <a class="{% if users_url in request.path %}active{% endif %}" href="{{ users_url }}"><span>Employees &amp; Collectors</span></a>
     {% endif %}
     {% if request.user.is_superuser %}
       {% url 'admin:myapp_recyclebinitem_changelist' as recycle_bin_url %}
-      <a class="{% if recycle_bin_url in request.path %}active{% endif %}" href="{{ recycle_bin_url }}"><i>R</i><span>Recycle Bin</span></a>
+      <a class="{% if recycle_bin_url in request.path %}active{% endif %}" href="{{ recycle_bin_url }}"><span>Recycle Bin</span></a>
     {% endif %}
-    <a href="{{ dashboard_url }}#audit-security"><i>!</i><span>Audit &amp; Security</span></a>
-    <a href="{{ dashboard_url }}#system-setting"><i>G</i><span>System Setting</span></a>
+    <a href="{{ dashboard_url }}#audit-security"><span>Audit &amp; Security</span></a>
+    <a href="{{ dashboard_url }}#system-setting"><span>System Setting</span></a>
     {% if request.user.is_authenticated %}
       {% url 'admin:myapp_staff_profile_settings' as profile_url %}
-      <a class="{% if request.path == profile_url %}active{% endif %}" href="{{ profile_url }}"><i>P</i><span>My Profile</span></a>
+      <a class="{% if request.path == profile_url %}active{% endif %}" href="{{ profile_url }}"><span>My Profile</span></a>
     {% endif %}
   </nav>
-
-  <div class="staff">
-    <div class="avatar">{{ request.user.username|default:"A"|first|upper }}</div>
-    <div>
-      <strong>{{ request.user.get_full_name|default:request.user.username|default:"Admin" }}</strong>
-      <span>{% if request.user.is_superuser %}Super Admin{% elif request.user.is_staff %}Staff{% else %}User{% endif %}</span>
-    </div>
-  </div>
 </aside>
-
