@@ -1,192 +1,240 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from "react";
 
 function Navbar() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const navbarRef = useRef(null)
+    const navbarRef = useRef(null);
 
-  // Toggle mobile menu
-  const toggleMenu = () => {
-    setIsMenuOpen((current) => !current)
-  }
+    const toggleMenu = () => {
+        setIsMenuOpen((current) => !current);
+    };
 
-  // Close menu
-  const closeMenu = () => {
-    setIsMenuOpen(false)
-  }
 
-  // Close menu when clicking outside navbar
-  useEffect(() => {
-    const handleOutsideClick = (event) => {
-      if (
-        navbarRef.current &&
-        !navbarRef.current.contains(event.target)
-      ) {
-        setIsMenuOpen(false)
-      }
-    }
+    const closeMenu = () => {
+        setIsMenuOpen(false);
+    };
 
-    document.addEventListener('mousedown', handleOutsideClick)
 
-    return () => {
-      document.removeEventListener(
-        'mousedown',
-        handleOutsideClick
-      )
-    }
-  }, [])
+    useEffect(() => {
+        const handleOutsideClick = (event) => {
+            if (
+                navbarRef.current &&
+                !navbarRef.current.contains(event.target)
+            ) {
+                setIsMenuOpen(false);
+            }
+        };
 
-  // Close menu when pressing Escape
-  useEffect(() => {
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        setIsMenuOpen(false)
-      }
-    }
+        document.addEventListener(
+            "pointerdown",
+            handleOutsideClick
+        );
 
-    document.addEventListener('keydown', handleEscape)
+        return () => {
+            document.removeEventListener(
+                "pointerdown",
+                handleOutsideClick
+            );
+        };
+    }, []);
 
-    return () => {
-      document.removeEventListener(
-        'keydown',
-        handleEscape
-      )
-    }
-  }, [])
 
-  return (
-    <nav
-      ref={navbarRef}
-      className="navbar navbar-expand-lg navbar-dark navbar-custom"
-    >
-      <div className="container-fluid">
+    useEffect(() => {
+        const handleEscape = (event) => {
+            if (event.key === "Escape") {
+                setIsMenuOpen(false);
+            }
+        };
 
-        {/* Brand */}
-        <a
-          className="navbar-brand"
-          href="#home"
-          onClick={closeMenu}
+        document.addEventListener(
+            "keydown",
+            handleEscape
+        );
+
+        return () => {
+            document.removeEventListener(
+                "keydown",
+                handleEscape
+            );
+        };
+    }, []);
+
+
+    useEffect(() => {
+        if (isMenuOpen && window.innerWidth <= 1199) {
+            document.body.style.overflow = "hidden";
+        } else {
+            document.body.style.overflow = "";
+        }
+
+        return () => {
+            document.body.style.overflow = "";
+        };
+    }, [isMenuOpen]);
+
+    return (
+        <nav
+            ref={navbarRef}
+            className="navbar-custom"
         >
-          NANU INVESTMENT
-        </a>
+            <div className="navbar-inner">
 
-        {/* Mobile Hamburger */}
-        <button
-          className="navbar-toggler"
-          type="button"
-          onClick={toggleMenu}
-          aria-controls="navbarNav"
-          aria-expanded={isMenuOpen}
-          aria-label="Toggle navigation"
-        >
-          <span className="navbar-toggler-icon"></span>
-        </button>
-
-        {/* Navigation Menu */}
-        <div
-          id="navbarNav"
-          className={`collapse navbar-collapse ${
-            isMenuOpen ? 'show' : ''
-          }`}
-        >
-          <ul className="navbar-nav ms-auto">
-
-            <li className="nav-item">
-              <a
-                className="nav-link"
-                href="#home"
-                onClick={closeMenu}
-              >
-                HOME
-              </a>
-            </li>
-
-            <li className="nav-item">
-              <a
-                className="nav-link"
-                href="#about"
-                onClick={closeMenu}
-              >
-                ABOUT US
-              </a>
-            </li>
-
-            <li className="nav-item">
-              <a
-                className="nav-link"
-                href="#services"
-                onClick={closeMenu}
-              >
-                SERVICES
-              </a>
-            </li>
-
-            <li className="nav-item">
-              <a
-                className="nav-link"
-                href="#news"
-                onClick={closeMenu}
-              >
-                NEWS & ACTIVITIES
-              </a>
-            </li>
-
-            <li className="nav-item">
-              <a
-                className="nav-link"
-                href="#notices"
-                onClick={closeMenu}
-              >
-                NOTICE
-              </a>
-            </li>
-
-            <li className="nav-item">
-              <a
-                className="nav-link"
-                href="#downloads"
-                onClick={closeMenu}
-              >
-                DOWNLOADS
-              </a>
-            </li>
-
-            <li className="nav-item">
-              <a
-                className="nav-link"
-                href="#contact"
-                onClick={closeMenu}
-              >
-                CONTACT US
-              </a>
-            </li>
-
-            {/* Login */}
-            <li className="nav-item">
-              <a
-                className="nav-link login-link"
-                href="/login/"
-                aria-label="Login"
-                data-tooltip="Login"
-                onClick={closeMenu}
-              >
-                <svg
-                  className="login-icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
+                <a
+                    href="#home"
+                    className="navbar-brand"
+                    onClick={closeMenu}
+                    aria-label="Nanu Investment Home"
                 >
-                  <path d="M20 21a8 8 0 0 0-16 0" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-              </a>
-            </li>
+                    <img
+                        src="../../public/static/company_logo.png"
+                        alt="Nanu Investment"
+                        className="navbar-logo"
+                    />
+                </a>
 
-          </ul>
-        </div>
 
-      </div>
-    </nav>
-  )
+                <button
+                    type="button"
+                    className={`navbar-toggler ${
+                        isMenuOpen ? "active" : ""
+                    }`}
+                    onClick={toggleMenu}
+                    aria-controls="navbarNav"
+                    aria-expanded={isMenuOpen}
+                    aria-label={
+                        isMenuOpen
+                            ? "Close navigation"
+                            : "Open navigation"
+                    }
+                >
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+
+
+                <div
+                    id="navbarNav"
+                    className={`navbar-menu ${
+                        isMenuOpen ? "show" : ""
+                    }`}
+                >
+                    <ul className="navbar-nav">
+
+                        {/* HOME */}
+                        <li className="nav-item">
+                            <a
+                                className="nav-link"
+                                href="#home"
+                                onClick={closeMenu}
+                            >
+                                HOME
+                            </a>
+                        </li>
+
+
+                        {/* ABOUT */}
+                        <li className="nav-item">
+                            <a
+                                className="nav-link"
+                                href="#about"
+                                onClick={closeMenu}
+                            >
+                                ABOUT US
+                            </a>
+                        </li>
+
+
+                        {/* SERVICES */}
+                        <li className="nav-item">
+                            <a
+                                className="nav-link"
+                                href="#services"
+                                onClick={closeMenu}
+                            >
+                                SERVICES
+                            </a>
+                        </li>
+
+
+                        {/* NEWS */}
+                        <li className="nav-item">
+                            <a
+                                className="nav-link"
+                                href="#news"
+                                onClick={closeMenu}
+                            >
+                                NEWS &amp; ACTIVITIES
+                            </a>
+                        </li>
+
+
+                        {/* NOTICE */}
+                        <li className="nav-item">
+                            <a
+                                className="nav-link"
+                                href="#notices"
+                                onClick={closeMenu}
+                            >
+                                NOTICE
+                            </a>
+                        </li>
+
+
+                        {/* DOWNLOADS */}
+                        <li className="nav-item">
+                            <a
+                                className="nav-link"
+                                href="#downloads"
+                                onClick={closeMenu}
+                            >
+                                DOWNLOADS
+                            </a>
+                        </li>
+
+
+                        {/* CONTACT */}
+                        <li className="nav-item">
+                            <a
+                                className="nav-link"
+                                href="#contact"
+                                onClick={closeMenu}
+                            >
+                                CONTACT US
+                            </a>
+                        </li>
+
+
+                        <li className="nav-item login-item">
+                            <a
+                                className="nav-link login-link"
+                                href="/login/"
+                                aria-label="Login"
+                                data-tooltip="Login"
+                                onClick={closeMenu}
+                            >
+                                <svg
+                                    className="login-icon"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                >
+                                    <path d="M20 21a8 8 0 0 0-16 0" />
+
+                                    <circle
+                                        cx="12"
+                                        cy="7"
+                                        r="4"
+                                    />
+                                </svg>
+                            </a>
+                        </li>
+
+                    </ul>
+                </div>
+
+            </div>
+        </nav>
+    );
 }
 
-export default Navbar
+export default Navbar;
