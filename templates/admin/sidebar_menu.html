@@ -85,9 +85,5 @@
     {% endif %}
     <a href="{{ dashboard_url }}#audit-security"><span>Audit &amp; Security</span></a>
     <a href="{{ dashboard_url }}#system-setting"><span>System Setting</span></a>
-    {% if request.user.is_authenticated %}
-      {% url 'admin:myapp_staff_profile_settings' as profile_url %}
-      <a class="{% if request.path == profile_url %}active{% endif %}" href="{{ profile_url }}"><span>My Profile</span></a>
-    {% endif %}
   </nav>
 </aside>
