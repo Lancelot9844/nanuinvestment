@@ -12,6 +12,10 @@
   --navbar-mobile-height: 64px;
 }
 
+/* =========================================
+ RESET
+ ========================================= */
+
 * {
   margin: 0;
   padding: 0;
@@ -20,6 +24,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: var(--navbar-height);
 }
 
 body {
@@ -33,7 +38,13 @@ body {
 
   line-height: 1.6;
 
-  overflow-x: hidden;
+  /*
+     IMPORTANT:
+     Use clip instead of hidden.
+     overflow-x: hidden can interfere with
+     position: sticky.
+  */
+  overflow-x: clip;
 }
 
 img {
@@ -52,31 +63,60 @@ select {
   font: inherit;
 }
 
+/* =========================================
+ APP SHELL
+ ========================================= */
+
 .app-shell {
   width: 100%;
   min-height: 100vh;
 
   background-color: var(--bg-white);
 
-  overflow-x: hidden;
+  /*
+     DO NOT use overflow-x: hidden here.
+     It can break sticky navbar behavior.
+  */
+  overflow-x: clip;
 
   /*
-       Space for fixed navbar
-    */
-  padding-top: var(--navbar-height);
+     No padding required because navbar
+     remains in normal document flow.
+  */
+  padding-top: 0;
 }
 
+/* =========================================
+ COMMON CONTAINERS
+ ========================================= */
+
+.navbar-custom .container-fluid,
 .top-bar .container-fluid,
 .main-container,
 .footer .container-fluid {
   width: 100%;
   max-width: 1440px;
-
   margin-left: auto;
   margin-right: auto;
 }
 
+/* =========================================
+ TOP BAR
+ ========================================= */
+
+/*
+ TOP BAR MUST SCROLL AWAY.
+
+ Do NOT use:
+ position: fixed;
+ position: sticky;
+
+ It remains normal document content.
+*/
+
 .top-bar {
+  position: relative;
+
   width: 100%;
 
   background-color: var(--bg-white);
@@ -86,7 +126,16 @@ select {
   border-bottom: 1px solid #eeeeee;
 
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+
+  /*
+     Keep below navbar when navbar becomes sticky.
+  */
+  z-index: auto;
 }
+
+/* =========================================
+ LOGO / CONTACT AREA
+ ========================================= */
 
 .logo-area {
   display: flex;
@@ -105,48 +154,65 @@ select {
 }
 
 .contact-info {
+  display: none !important;
+  position: relative;
+  z-index: 9999;
   display: flex;
-
   align-items: center;
   justify-content: center;
-
   gap: clamp(12px, 3vw, 40px);
-
-  flex-wrap: wrap;
-
-  padding: 0 8px;
-
-  font-size: 0.95rem;
+  color: red;
 }
 
-.contact-item strong {
-  color: var(--primary-blue);
 
-  font-size: clamp(0.9rem, 1.6vw, 1.35rem);
 
-  white-space: nowrap;
+.contact-item {
+  margin: -10px;
 }
+
+/* =========================================
+ NAVBAR
+ ========================================= */
+
+/*
+ IMPORTANT:
+
+ Sticky navbar gives exactly this behavior:
+
+ BEFORE SCROLL:
+ -------------------------
+ TOP BAR
+ NAVBAR
+ CONTENT
+ -------------------------
+
+ AFTER SCROLL:
+ -------------------------
+ NAVBAR  <-- stays at top
+ -------------------------
+ CONTENT
+ -------------------------
+
+ Top bar scrolls away naturally.
+
+ Do NOT use position: fixed here.
+*/
 
 .navbar-custom {
-  position: fixed;
-
+  position: fixed !important;
   top: 0;
-  left: 0;
-  right: 0;
-
   width: 100%;
 
   height: var(--navbar-height);
-  min-height: var(--navbar-height);
 
-  background-color: var(--primary-blue);
+  background-color: var(--primary-blue) !important;
 
-  padding: 8px clamp(16px, 4vw, 64px);
-
-  z-index: 9999;
-
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  z-index: 1 !important;
 }
+
+/* =========================================
+ NAVBAR INNER
+ ========================================= */
 
 .navbar-inner {
   width: 100%;
@@ -164,6 +230,10 @@ select {
 
   flex-wrap: nowrap;
 }
+
+/* =========================================
+ NAVBAR BRAND
+ ========================================= */
 
 .navbar-brand {
   display: flex;
@@ -188,6 +258,10 @@ select {
 
   object-position: left center;
 }
+
+/* =========================================
+ NAVIGATION MENU
+ ========================================= */
 
 .navbar-menu {
   display: flex;
@@ -224,6 +298,10 @@ select {
   flex-shrink: 0;
 }
 
+/* =========================================
+ NAV LINKS
+ ========================================= */
+
 .nav-link {
   display: flex;
 
@@ -249,6 +327,10 @@ select {
 .nav-link:focus {
   color: var(--accent-red);
 }
+
+/* =========================================
+ LOGIN BUTTON
+ ========================================= */
 
 .login-item {
   margin-left: 5px;
@@ -296,6 +378,10 @@ select {
   stroke-linejoin: round;
 }
 
+/* =========================================
+ LOGIN TOOLTIP
+ ========================================= */
+
 .login-link::after {
   content: attr(data-tooltip);
 
@@ -333,6 +419,10 @@ select {
 
   transform: translateX(-50%) translateY(2px);
 }
+
+/* =========================================
+ MOBILE HAMBURGER
+ ========================================= */
 
 .navbar-toggler {
   display: none;
@@ -379,7 +469,9 @@ select {
   transition: transform 0.25s ease, opacity 0.25s ease;
 }
 
-/* Hamburger -> X */
+/* =========================================
+ HAMBURGER -> X
+ ========================================= */
 
 .navbar-toggler.active span:nth-child(1) {
   transform: translateY(7px) rotate(45deg);
@@ -393,6 +485,10 @@ select {
   transform: translateY(-7px) rotate(-45deg);
 }
 
+/* =========================================
+ ACCENT LINE
+ ========================================= */
+
 .accent-line {
   width: 100%;
   height: 4px;
@@ -400,11 +496,12 @@ select {
   background-color: var(--accent-red);
 }
 
+/* =========================================
+ SLIDER
+ ========================================= */
+
 .slider-container {
   width: 100%;
-
-  padding: clamp(12px, 2.5vw, 32px) clamp(12px, 5vw, 80px);
-
   background-color: var(--bg-white);
 }
 
@@ -434,17 +531,17 @@ select {
 
 .slide img {
   display: block;
-
+  margin-top: 48px;
   width: 100%;
-
   height: clamp(220px, 42vw, 560px);
-
-  object-fit: cover;
-
+  object-fit: fit;
   object-position: center;
-
   border-radius: 8px;
 }
+
+/* =========================================
+ SLIDER DOTS
+ ========================================= */
 
 .slider-dots {
   display: flex;
@@ -480,6 +577,10 @@ select {
   transform: scale(1.1);
 }
 
+/* =========================================
+ MAIN CONTAINER
+ ========================================= */
+
 .main-container {
   width: 100%;
 
@@ -489,6 +590,10 @@ select {
 
   padding-right: clamp(12px, 5vw, 80px);
 }
+
+/* =========================================
+ WELCOME
+ ========================================= */
 
 .welcome-section {
   width: 100%;
@@ -536,6 +641,10 @@ select {
   text-align: center;
 }
 
+/* =========================================
+ BUTTON
+ ========================================= */
+
 .btn-custom {
   display: inline-block;
 
@@ -560,12 +669,17 @@ select {
   background-color: var(--accent-red);
 }
 
+/* =========================================
+ OWNER SECTION
+ ========================================= */
+
 .owner-section {
   width: 100%;
 
   background-color: var(--bg-white);
 
   border-top: 1px solid #eeeeee;
+
   border-bottom: 1px solid #eeeeee;
 }
 
@@ -656,6 +770,10 @@ select {
 
   font-size: 0.95rem;
 }
+
+/* =========================================
+ SERVICES
+ ========================================= */
 
 .services-section {
   width: 100%;
@@ -770,6 +888,10 @@ select {
   line-height: 1.6;
 }
 
+/* =========================================
+ CONTENT SECTIONS
+ ========================================= */
+
 .content-section {
   width: 100%;
 
@@ -780,6 +902,7 @@ select {
 
 .compact-section {
   padding-top: 20px;
+
   padding-bottom: 20px;
 
   border-top: 1px solid #ececf2;
@@ -874,6 +997,10 @@ select {
   color: var(--primary-blue);
 }
 
+/* =========================================
+ FOOTER
+ ========================================= */
+
 .footer {
   width: 100%;
 
@@ -927,6 +1054,10 @@ select {
   line-height: 1.6;
 }
 
+/* =========================================
+ FORM
+ ========================================= */
+
 .form-control {
   width: 100%;
 
@@ -943,6 +1074,8 @@ select {
   border-color: var(--accent-red);
 
   box-shadow: 0 0 0 0.2rem rgba(211, 47, 47, 0.25);
+
+  outline: none;
 }
 
 .contact-form {
@@ -965,6 +1098,10 @@ select {
   text-align: center;
 }
 
+/* =========================================
+ FOOTER BOTTOM
+ ========================================= */
+
 .footer-bottom {
   padding: 12px 0;
 
@@ -974,6 +1111,10 @@ select {
 
   text-align: center;
 }
+
+/* =========================================
+ POPUP
+ ========================================= */
 
 .website-popup-backdrop {
   position: fixed;
@@ -1096,7 +1237,26 @@ select {
   white-space: pre-line;
 }
 
+/* =========================================
+ LARGE DESKTOP
+ ========================================= */
+
 @media (min-width: 1200px) {
+
+.contact-info {
+  display: flex !important;
+  position: relative;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: right;
+  gap: clamp(12px, 3vw, 40px);
+  color: red;
+}
+  .navbar-custom {
+    height: var(--navbar-height);
+  }
+
   .navbar-toggler {
     display: none;
   }
@@ -1117,6 +1277,7 @@ select {
 
   .navbar-logo {
     width: 250px;
+
     height: 58px;
   }
 
@@ -1125,16 +1286,25 @@ select {
   }
 }
 
+/* =========================================
+ TABLET / SMALL DESKTOP
+ ========================================= */
+
 @media (max-width: 1199.98px) {
-  .app-shell {
-    padding-top: var(--navbar-mobile-height);
+  /*
+     Mobile/tablet sticky navbar height.
+  */
+
+  html {
+    scroll-padding-top: var(--navbar-mobile-height);
   }
 
   .navbar-custom {
     height: var(--navbar-mobile-height);
+
     min-height: var(--navbar-mobile-height);
 
-    padding: 7px 16px;
+    padding: 7px 16px !important;
   }
 
   .navbar-inner {
@@ -1143,6 +1313,7 @@ select {
 
   .navbar-logo {
     width: 210px;
+
     height: 48px;
   }
 
@@ -1202,6 +1373,7 @@ select {
 
   .login-link {
     width: 40px !important;
+
     height: 40px !important;
 
     margin: 10px 0 5px 8px !important;
@@ -1229,6 +1401,7 @@ select {
 
   .main-container {
     padding-left: 14px;
+
     padding-right: 14px;
   }
 
@@ -1237,13 +1410,18 @@ select {
   }
 }
 
+/* =========================================
+ MOBILE
+ ========================================= */
+
 @media (max-width: 767.98px) {
   .navbar-custom {
-    padding: 7px 14px;
+    padding: 7px 14px !important;
   }
 
   .navbar-logo {
     width: 180px;
+
     height: 48px;
   }
 
@@ -1329,6 +1507,7 @@ select {
 
   .footer {
     padding-left: 14px;
+
     padding-right: 14px;
 
     text-align: center;
@@ -1373,18 +1552,24 @@ select {
   }
 }
 
+/* =========================================
+ SMALL MOBILE
+ ========================================= */
+
 @media (max-width: 575.98px) {
   .navbar-custom {
-    padding: 7px 12px;
+    padding: 7px 12px !important;
   }
 
   .navbar-logo {
     width: 165px;
+
     height: 44px;
   }
 
   .navbar-toggler {
     width: 42px;
+
     height: 40px;
   }
 
@@ -1400,6 +1585,7 @@ select {
 
   .dot {
     width: 10px;
+
     height: 10px;
   }
 
@@ -1424,19 +1610,26 @@ select {
   }
 }
 
+/* =========================================
+ VERY SMALL MOBILE
+ ========================================= */
+
 @media (max-width: 400px) {
   .navbar-custom {
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-left: 10px !important;
+
+    padding-right: 10px !important;
   }
 
   .navbar-logo {
     width: 145px;
+
     height: 40px;
   }
 
   .navbar-toggler {
     width: 40px;
+
     height: 38px;
   }
 
@@ -1446,6 +1639,7 @@ select {
 
   .main-container {
     padding-left: 10px;
+
     padding-right: 10px;
   }
 

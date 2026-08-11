@@ -1,63 +1,100 @@
-import { useEffect, useState } from 'react'
-import './App.css'
+import { useEffect, useState } from "react";
+import "./App.css";
 
-import Navbar from './components/Navbar.jsx'
-import Slider from './components/Slider.jsx'
-import About from './components/About.jsx'
-import Chairman from './components/Chairman.jsx'
-import Services from './components/Services.jsx'
-import ContentSection from './components/ContentSection.jsx'
-import Popup from './components/Popup.jsx'
-import Footer from './components/Footer.jsx'
+import Navbar from "./components/Navbar.jsx";
+import Slider from "./components/Slider.jsx";
+import About from "./components/About.jsx";
+import Chairman from "./components/Chairman.jsx";
+import Services from "./components/Services.jsx";
+import ContentSection from "./components/ContentSection.jsx";
+import Popup from "./components/Popup.jsx";
+import Footer from "./components/Footer.jsx";
 
-import { readSiteContent } from './utils/siteContent.js'
-import { fetchSiteContent } from './services/siteContentService.js'
-import { addSeoSchema } from './utils/seoSchema.js'
+import { readSiteContent } from "./utils/siteContent.js";
+import { fetchSiteContent } from "./services/siteContentService.js";
+import { addSeoSchema } from "./utils/seoSchema.js";
 
 function App() {
-  const [siteContent, setSiteContent] = useState(readSiteContent)
+  const [siteContent, setSiteContent] = useState(readSiteContent);
 
   const [showPopup, setShowPopup] = useState(
     Boolean(siteContent.popup)
-  )
+  );
 
   // Load dynamic Django content
   useEffect(() => {
-    let ignore = false
+    let ignore = false;
 
     async function loadContent() {
       try {
-        const nextContent = await fetchSiteContent()
+        const nextContent = await fetchSiteContent();
 
         if (!ignore) {
-          setSiteContent(nextContent)
-          setShowPopup(Boolean(nextContent.popup))
+          setSiteContent(nextContent);
+          setShowPopup(Boolean(nextContent.popup));
         }
       } catch (error) {
-        console.error('Failed to load site content:', error)
+        console.error("Failed to load site content:", error);
       }
     }
 
-    loadContent()
+    loadContent();
 
     return () => {
-      ignore = true
-    }
-  }, [])
+      ignore = true;
+    };
+  }, []);
 
   // SEO Schema
   useEffect(() => {
-    return addSeoSchema()
-  }, [])
+    return addSeoSchema();
+  }, []);
 
   const closePopup = () => {
-    setShowPopup(false)
-  }
+    setShowPopup(false);
+  };
 
   return (
     <div className="app-shell">
 
-      {/* Popup */}
+      {/* =========================================
+          TOP BAR
+          This is normal document content.
+          It will scroll away.
+      ========================================= */}
+      <div className="top-bar">
+        <div className="container-fluid">
+          <div className="contact-info">
+
+            <div className="contact-item">
+              <strong>📞 +977 9744360267</strong>
+            </div>
+
+            <div className="contact-item">
+              <strong>🕘 9:00am-5:00pm (Monday-Friday)</strong>
+            </div>
+
+            <div className="contact-item">
+              <strong>✉ info@nanuinvestment.com</strong>
+            </div>
+
+            <div className="contact-item">
+              <strong>📍 Barahathawa-12, Sarlahi</strong>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      {/* =========================================
+          NAVBAR
+          Sticky navbar stays at top after scrolling.
+      ========================================= */}
+      <Navbar />
+
+      {/* =========================================
+          POPUP
+      ========================================= */}
       {showPopup && siteContent.popup && (
         <Popup
           popup={siteContent.popup}
@@ -65,15 +102,14 @@ function App() {
         />
       )}
 
-      {/* Navigation */}
-      <Navbar />
+      {/* =========================================
+          HERO SLIDER
+      ========================================= */}
+      <Slider slides={siteContent.banners} />
 
-      {/* Hero Slider */}
-      <Slider
-        slides={siteContent.banners}
-      />
-
-      {/* Main Content */}
+      {/* =========================================
+          MAIN CONTENT
+      ========================================= */}
       <main className="main-container">
 
         {/* About */}
@@ -113,11 +149,13 @@ function App() {
 
       </main>
 
-      {/* Footer */}
+      {/* =========================================
+          FOOTER
+      ========================================= */}
       <Footer />
 
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

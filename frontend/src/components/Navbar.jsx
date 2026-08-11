@@ -5,16 +5,23 @@ function Navbar() {
 
     const navbarRef = useRef(null);
 
+    /* =========================================
+       TOGGLE MOBILE MENU
+    ========================================= */
     const toggleMenu = () => {
         setIsMenuOpen((current) => !current);
     };
 
-
+    /* =========================================
+       CLOSE MOBILE MENU
+    ========================================= */
     const closeMenu = () => {
         setIsMenuOpen(false);
     };
 
-
+    /* =========================================
+       CLOSE WHEN CLICKING OUTSIDE NAVBAR
+    ========================================= */
     useEffect(() => {
         const handleOutsideClick = (event) => {
             if (
@@ -38,7 +45,9 @@ function Navbar() {
         };
     }, []);
 
-
+    /* =========================================
+       CLOSE WITH ESCAPE KEY
+    ========================================= */
     useEffect(() => {
         const handleEscape = (event) => {
             if (event.key === "Escape") {
@@ -59,9 +68,15 @@ function Navbar() {
         };
     }, []);
 
-
+    /* =========================================
+       PREVENT PAGE SCROLL WHEN MOBILE MENU
+       IS OPEN
+    ========================================= */
     useEffect(() => {
-        if (isMenuOpen && window.innerWidth <= 1199) {
+        const isMobile =
+            window.innerWidth <= 1199;
+
+        if (isMenuOpen && isMobile) {
             document.body.style.overflow = "hidden";
         } else {
             document.body.style.overflow = "";
@@ -79,20 +94,26 @@ function Navbar() {
         >
             <div className="navbar-inner">
 
+                {/* =====================================
+                    LOGO
+                ===================================== */}
                 <a
-                    href="#home"
+                    href="/"
                     className="navbar-brand"
                     onClick={closeMenu}
                     aria-label="Nanu Investment Home"
                 >
                     <img
-                        src="../../public/static/company_logo.png"
+                        src="/static/company_logo.png"
                         alt="Nanu Investment"
                         className="navbar-logo"
                     />
                 </a>
 
 
+                {/* =====================================
+                    HAMBURGER BUTTON
+                ===================================== */}
                 <button
                     type="button"
                     className={`navbar-toggler ${
@@ -113,6 +134,9 @@ function Navbar() {
                 </button>
 
 
+                {/* =====================================
+                    NAVIGATION MENU
+                ===================================== */}
                 <div
                     id="navbarNav"
                     className={`navbar-menu ${
@@ -205,6 +229,9 @@ function Navbar() {
                         </li>
 
 
+                        {/* =================================
+                            LOGIN / USER ICON
+                        ================================= */}
                         <li className="nav-item login-item">
                             <a
                                 className="nav-link login-link"
@@ -218,7 +245,9 @@ function Navbar() {
                                     viewBox="0 0 24 24"
                                     aria-hidden="true"
                                 >
-                                    <path d="M20 21a8 8 0 0 0-16 0" />
+                                    <path
+                                        d="M20 21a8 8 0 0 0-16 0"
+                                    />
 
                                     <circle
                                         cx="12"
