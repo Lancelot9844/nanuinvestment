@@ -1,4 +1,4 @@
-import { fallbackContent } from '../data/siteData'
+import { fallbackContent } from "../data/siteData";
 
 export function normalizeSiteContent(content = {}) {
   return {
@@ -23,20 +23,20 @@ export function normalizeSiteContent(content = {}) {
         : fallbackContent.downloads,
 
     popup: content.popup || null,
-  }
+  };
 }
 
 export function readSiteContent() {
-  const node = document.getElementById('site-content')
+  const node = document.getElementById("site-content");
 
   if (!node?.textContent) {
-    return fallbackContent
+    return fallbackContent;
   }
 
   try {
-    return normalizeSiteContent(JSON.parse(node.textContent))
+    return normalizeSiteContent(JSON.parse(node.textContent));
   } catch (error) {
-    console.error('Failed to parse site content:', error)
-    return fallbackContent
+    console.error("Failed to parse site content:", error);
+    return fallbackContent;
   }
 }

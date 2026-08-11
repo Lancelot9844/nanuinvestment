@@ -12,10 +12,6 @@
   --navbar-mobile-height: 64px;
 }
 
-/* =========================================
- RESET
- ========================================= */
-
 * {
   margin: 0;
   padding: 0;
@@ -30,20 +26,10 @@ html {
 body {
   margin: 0;
   padding: 0;
-
   background-color: var(--bg-light);
   color: var(--text-main);
-
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-
   line-height: 1.6;
-
-  /*
-     IMPORTANT:
-     Use clip instead of hidden.
-     overflow-x: hidden can interfere with
-     position: sticky.
-  */
   overflow-x: clip;
 }
 
@@ -63,32 +49,13 @@ select {
   font: inherit;
 }
 
-/* =========================================
- APP SHELL
- ========================================= */
-
 .app-shell {
   width: 100%;
   min-height: 100vh;
-
   background-color: var(--bg-white);
-
-  /*
-     DO NOT use overflow-x: hidden here.
-     It can break sticky navbar behavior.
-  */
   overflow-x: clip;
-
-  /*
-     No padding required because navbar
-     remains in normal document flow.
-  */
   padding-top: 0;
 }
-
-/* =========================================
- COMMON CONTAINERS
- ========================================= */
 
 .navbar-custom .container-fluid,
 .top-bar .container-fluid,
@@ -100,42 +67,15 @@ select {
   margin-right: auto;
 }
 
-/* =========================================
- TOP BAR
- ========================================= */
-
-/*
- TOP BAR MUST SCROLL AWAY.
-
- Do NOT use:
- position: fixed;
- position: sticky;
-
- It remains normal document content.
-*/
-
 .top-bar {
   position: relative;
-
   width: 100%;
-
   background-color: var(--bg-white);
-
   padding: 10px clamp(16px, 4vw, 64px);
-
   border-bottom: 1px solid #eeeeee;
-
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-
-  /*
-     Keep below navbar when navbar becomes sticky.
-  */
   z-index: auto;
 }
-
-/* =========================================
- LOGO / CONTACT AREA
- ========================================= */
 
 .logo-area {
   display: flex;
@@ -164,39 +104,9 @@ select {
   color: red;
 }
 
-
-
 .contact-item {
   margin: -10px;
 }
-
-/* =========================================
- NAVBAR
- ========================================= */
-
-/*
- IMPORTANT:
-
- Sticky navbar gives exactly this behavior:
-
- BEFORE SCROLL:
- -------------------------
- TOP BAR
- NAVBAR
- CONTENT
- -------------------------
-
- AFTER SCROLL:
- -------------------------
- NAVBAR  <-- stays at top
- -------------------------
- CONTENT
- -------------------------
-
- Top bar scrolls away naturally.
-
- Do NOT use position: fixed here.
-*/
 
 .navbar-custom {
   position: fixed !important;
@@ -209,10 +119,6 @@ select {
 
   z-index: 1 !important;
 }
-
-/* =========================================
- NAVBAR INNER
- ========================================= */
 
 .navbar-inner {
   width: 100%;
@@ -230,10 +136,6 @@ select {
 
   flex-wrap: nowrap;
 }
-
-/* =========================================
- NAVBAR BRAND
- ========================================= */
 
 .navbar-brand {
   display: flex;
@@ -258,10 +160,6 @@ select {
 
   object-position: left center;
 }
-
-/* =========================================
- NAVIGATION MENU
- ========================================= */
 
 .navbar-menu {
   display: flex;
@@ -298,10 +196,6 @@ select {
   flex-shrink: 0;
 }
 
-/* =========================================
- NAV LINKS
- ========================================= */
-
 .nav-link {
   display: flex;
 
@@ -327,10 +221,6 @@ select {
 .nav-link:focus {
   color: var(--accent-red);
 }
-
-/* =========================================
- LOGIN BUTTON
- ========================================= */
 
 .login-item {
   margin-left: 5px;
@@ -378,10 +268,6 @@ select {
   stroke-linejoin: round;
 }
 
-/* =========================================
- LOGIN TOOLTIP
- ========================================= */
-
 .login-link::after {
   content: attr(data-tooltip);
 
@@ -419,10 +305,6 @@ select {
 
   transform: translateX(-50%) translateY(2px);
 }
-
-/* =========================================
- MOBILE HAMBURGER
- ========================================= */
 
 .navbar-toggler {
   display: none;
@@ -469,10 +351,6 @@ select {
   transition: transform 0.25s ease, opacity 0.25s ease;
 }
 
-/* =========================================
- HAMBURGER -> X
- ========================================= */
-
 .navbar-toggler.active span:nth-child(1) {
   transform: translateY(7px) rotate(45deg);
 }
@@ -485,20 +363,12 @@ select {
   transform: translateY(-7px) rotate(-45deg);
 }
 
-/* =========================================
- ACCENT LINE
- ========================================= */
-
 .accent-line {
   width: 100%;
   height: 4px;
 
   background-color: var(--accent-red);
 }
-
-/* =========================================
- SLIDER
- ========================================= */
 
 .slider-container {
   width: 100%;
@@ -539,10 +409,6 @@ select {
   border-radius: 8px;
 }
 
-/* =========================================
- SLIDER DOTS
- ========================================= */
-
 .slider-dots {
   display: flex;
 
@@ -577,10 +443,6 @@ select {
   transform: scale(1.1);
 }
 
-/* =========================================
- MAIN CONTAINER
- ========================================= */
-
 .main-container {
   width: 100%;
 
@@ -590,10 +452,6 @@ select {
 
   padding-right: clamp(12px, 5vw, 80px);
 }
-
-/* =========================================
- WELCOME
- ========================================= */
 
 .welcome-section {
   width: 100%;
@@ -641,10 +499,6 @@ select {
   text-align: center;
 }
 
-/* =========================================
- BUTTON
- ========================================= */
-
 .btn-custom {
   display: inline-block;
 
@@ -668,10 +522,6 @@ select {
 .btn-custom:hover {
   background-color: var(--accent-red);
 }
-
-/* =========================================
- OWNER SECTION
- ========================================= */
 
 .owner-section {
   width: 100%;
@@ -770,10 +620,6 @@ select {
 
   font-size: 0.95rem;
 }
-
-/* =========================================
- SERVICES
- ========================================= */
 
 .services-section {
   width: 100%;
@@ -888,10 +734,6 @@ select {
   line-height: 1.6;
 }
 
-/* =========================================
- CONTENT SECTIONS
- ========================================= */
-
 .content-section {
   width: 100%;
 
@@ -997,10 +839,6 @@ select {
   color: var(--primary-blue);
 }
 
-/* =========================================
- FOOTER
- ========================================= */
-
 .footer {
   width: 100%;
 
@@ -1054,10 +892,6 @@ select {
   line-height: 1.6;
 }
 
-/* =========================================
- FORM
- ========================================= */
-
 .form-control {
   width: 100%;
 
@@ -1098,10 +932,6 @@ select {
   text-align: center;
 }
 
-/* =========================================
- FOOTER BOTTOM
- ========================================= */
-
 .footer-bottom {
   padding: 12px 0;
 
@@ -1112,147 +942,17 @@ select {
   text-align: center;
 }
 
-/* =========================================
- POPUP
- ========================================= */
-
-.website-popup-backdrop {
-  position: fixed;
-
-  inset: 0;
-
-  z-index: 99999;
-
-  display: grid;
-
-  place-items: center;
-
-  padding: clamp(16px, 4vw, 32px);
-
-  background: rgba(5, 8, 18, 0.62);
-
-  backdrop-filter: blur(5px);
-}
-
-.website-popup {
-  position: relative;
-
-  width: min(100%, 820px);
-
-  max-height: 90vh;
-
-  overflow: auto;
-
-  background-color: #ffffff;
-
-  border-radius: 8px;
-
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
-}
-
-.website-popup-close {
-  position: absolute;
-
-  top: 10px;
-  right: 10px;
-
-  z-index: 2;
-
-  width: 38px;
-  height: 38px;
-
-  border: 0;
-
-  border-radius: 50%;
-
-  background: rgba(0, 0, 0, 0.62);
-
-  color: #ffffff;
-
-  font-size: 28px;
-
-  line-height: 1;
-
-  cursor: pointer;
-}
-
-.website-popup-media {
-  width: 100%;
-
-  background-color: #eef2f5;
-}
-
-.website-popup-image {
-  width: 100%;
-
-  max-height: 62vh;
-
-  object-fit: contain;
-}
-
-.website-popup-pdf {
-  width: 100%;
-
-  height: min(68vh, 620px);
-
-  min-height: 420px;
-}
-
-.website-popup-pdf iframe {
-  display: block;
-
-  width: 100%;
-  height: 100%;
-
-  border: 0;
-}
-
-.website-popup-content {
-  padding: clamp(20px, 4vw, 30px);
-
-  text-align: center;
-}
-
-.website-popup-content h2 {
-  margin: 0 0 10px;
-
-  color: var(--primary-blue);
-
-  font-size: clamp(1.35rem, 3vw, 2rem);
-
-  line-height: 1.2;
-
-  font-weight: 800;
-}
-
-.website-popup-content p {
-  margin: 0;
-
-  color: var(--text-muted);
-
-  font-size: 1rem;
-
-  line-height: 1.65;
-
-  white-space: pre-line;
-}
-
-/* =========================================
- LARGE DESKTOP
- ========================================= */
-
 @media (min-width: 1200px) {
-
-.contact-info {
-  display: flex !important;
-  position: relative;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: right;
-  gap: clamp(12px, 3vw, 40px);
-  color: red;
-}
+  .contact-info {
+    display: flex !important;
+    position: relative;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: right;
+    gap: clamp(12px, 3vw, 40px);
+    color: red;
+  }
   .navbar-custom {
     height: var(--navbar-height);
   }
@@ -1286,15 +986,7 @@ select {
   }
 }
 
-/* =========================================
- TABLET / SMALL DESKTOP
- ========================================= */
-
 @media (max-width: 1199.98px) {
-  /*
-     Mobile/tablet sticky navbar height.
-  */
-
   html {
     scroll-padding-top: var(--navbar-mobile-height);
   }
@@ -1409,10 +1101,6 @@ select {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-
-/* =========================================
- MOBILE
- ========================================= */
 
 @media (max-width: 767.98px) {
   .navbar-custom {
@@ -1552,10 +1240,6 @@ select {
   }
 }
 
-/* =========================================
- SMALL MOBILE
- ========================================= */
-
 @media (max-width: 575.98px) {
   .navbar-custom {
     padding: 7px 12px !important;
@@ -1610,10 +1294,6 @@ select {
   }
 }
 
-/* =========================================
- VERY SMALL MOBILE
- ========================================= */
-
 @media (max-width: 400px) {
   .navbar-custom {
     padding-left: 10px !important;
@@ -1654,4 +1334,265 @@ select {
   .service-icon {
     height: 130px;
   }
+}
+
+.premium-calculator-float {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+
+  display: flex;
+  align-items: center;
+
+  width: 58px;
+  height: 58px;
+
+  padding: 0 18px;
+
+  background: #202b8f;
+  color: #ffffff;
+
+  text-decoration: none;
+
+  border-radius: 12px 0 0 12px;
+
+  overflow: hidden;
+
+  z-index: 9999;
+
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+/* Calculator icon */
+
+.calculator-icon {
+  flex-shrink: 0;
+
+  font-size: 25px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Text hidden normally */
+
+.calculator-text {
+  white-space: nowrap;
+
+  margin-left: 10px;
+
+  opacity: 0;
+
+  transform: translateX(15px);
+
+  transition: opacity 0.2s ease, transform 0.3s ease;
+}
+
+.premium-calculator-float:hover {
+  width: 220px;
+
+  background: #182174;
+}
+
+/* Show text on hover */
+
+.premium-calculator-float:hover .calculator-text {
+  opacity: 1;
+
+  transform: translateX(0);
+}
+
+@media (max-width: 768px) {
+  .premium-calculator-float {
+    width: 52px;
+    height: 52px;
+
+    padding: 0 14px;
+
+    border-radius: 10px 0 0 10px;
+  }
+
+  .calculator-icon {
+    font-size: 22px;
+  }
+
+  .premium-calculator-float:hover {
+    width: 200px;
+  }
+}
+
+.premium-calculator {
+  width: 100%;
+  max-width: 1270px;
+
+  margin: 0 auto;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr);
+
+  gap: 30px;
+
+  padding: 28px;
+
+  background-color: #ffffff;
+
+  border-radius: 18px;
+
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.08);
+
+  border: 1px solid #eeeeee;
+}
+
+.calculator-form {
+  min-width: 0;
+}
+
+.calculator-title {
+  margin: 0 0 8px;
+
+  color: #333333;
+
+  font-size: clamp(1.8rem, 2.5vw, 2.5rem);
+
+  font-weight: 500;
+
+  line-height: 1.2;
+}
+
+.calculator-subtitle {
+  margin: 0 0 24px;
+
+  color: #667995;
+
+  font-size: 1rem;
+
+  line-height: 1.5;
+}
+
+.calculator-form-group {
+  margin-bottom: 15px;
+}
+
+.calculator-form-group label {
+  display: block;
+
+  margin-bottom: 6px;
+
+  color: #333333;
+
+  font-size: 1rem;
+
+  font-weight: 700;
+}
+
+.calculator-input,
+.calculator-select {
+  width: 100%;
+
+  height: 48px;
+
+  padding: 0 14px;
+
+  border: 1px solid #d6dce3;
+
+  border-radius: 9px;
+
+  background-color: #ffffff;
+
+  color: #222222;
+
+  font-size: 1rem;
+
+  outline: none;
+
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.calculator-input:focus,
+.calculator-select:focus {
+  border-color: #2864df;
+
+  box-shadow: 0 0 0 3px rgba(40, 100, 223, 0.12);
+}
+
+.calculator-result {
+  min-width: 0;
+
+  padding: 30px;
+
+  background-color: #f7fafc;
+
+  border: 1px solid #dce2e8;
+
+  border-radius: 16px;
+}
+
+.calculator-result h2 {
+  margin: 0 0 25px;
+
+  color: #333333;
+
+  font-size: clamp(1.8rem, 2.5vw, 2.4rem);
+
+  font-weight: 500;
+
+  line-height: 1.2;
+}
+
+.final-balance-label {
+  margin-bottom: 5px;
+
+  color: #667995;
+
+  font-size: 1rem;
+}
+
+.final-balance {
+  margin-bottom: 25px;
+
+  color: #2864df;
+
+  font-size: clamp(2rem, 3.5vw, 3rem);
+
+  font-weight: 800;
+
+  line-height: 1.1;
+}
+
+.calculator-result-row {
+  min-height: 60px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 20px;
+
+  border-bottom: 1px solid #dfe4e8;
+}
+
+.calculator-result-row:last-child {
+  border-bottom: none;
+}
+
+.calculator-result-label {
+  color: #667995;
+
+  font-size: 1rem;
+}
+
+.calculator-result-value {
+  color: #333333;
+
+  font-size: 1rem;
+
+  font-weight: 700;
+
+  text-align: right;
 }

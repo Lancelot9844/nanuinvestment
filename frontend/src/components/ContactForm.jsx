@@ -1,86 +1,72 @@
-import { useState } from 'react'
+import { useState } from "react";
 
 function ContactForm() {
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    message: '',
-  })
+    name: "",
+    email: "",
+    phone: "",
+    message: "",
+  });
 
-  const [formStatus, setFormStatus] = useState('')
+  const [formStatus, setFormStatus] = useState("");
 
   const handleFormChange = (event) => {
-    const { name, value } = event.target
+    const { name, value } = event.target;
 
     setFormData((previous) => ({
       ...previous,
       [name]: value,
-    }))
-  }
+    }));
+  };
 
   const handleFormSubmit = async (event) => {
-    event.preventDefault()
+    event.preventDefault();
 
-    setFormStatus('Sending...')
+    setFormStatus("Sending...");
 
     try {
-      const response = await fetch(
-        'https://api.web3forms.com/submit',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            access_key:
-              import.meta.env.VITE_WEB3FORMS_ACCESS_KEY,
+      const response = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          access_key: import.meta.env.VITE_WEB3FORMS_ACCESS_KEY,
 
-            subject:
-              'New Contact Inquiry from Nanu Investment',
+          subject: "New Contact Inquiry from Nanu Investment",
 
-            name: formData.name,
-            email: formData.email,
-            phone: formData.phone,
-            message: formData.message,
-          }),
-        }
-      )
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          message: formData.message,
+        }),
+      });
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (data.success) {
-        setFormStatus(
-          'Message sent successfully.'
-        )
+        setFormStatus("Message sent successfully.");
 
         setFormData({
-          name: '',
-          email: '',
-          phone: '',
-          message: '',
-        })
+          name: "",
+          email: "",
+          phone: "",
+          message: "",
+        });
 
         setTimeout(() => {
-          setFormStatus('')
-        }, 3000)
+          setFormStatus("");
+        }, 3000);
       } else {
-        setFormStatus(
-          'Error sending message. Please try again.'
-        )
+        setFormStatus("Error sending message. Please try again.");
       }
     } catch {
-      setFormStatus(
-        'Error sending message. Please try again.'
-      )
+      setFormStatus("Error sending message. Please try again.");
     }
-  }
+  };
 
   return (
-    <form
-      onSubmit={handleFormSubmit}
-      className="contact-form"
-    >
+    <form onSubmit={handleFormSubmit} className="contact-form">
       <input
         type="text"
         className="form-control"
@@ -121,23 +107,17 @@ function ContactForm() {
         required
       />
 
-      <button
-        type="submit"
-        className="btn btn-custom w-100"
-      >
+      <button type="submit" className="btn btn-custom w-100">
         Send Message
       </button>
 
       {formStatus && (
-        <p
-          className="form-message mt-2 text-center fw-bold"
-          aria-live="polite"
-        >
+        <p className="form-message mt-2 text-center fw-bold" aria-live="polite">
           {formStatus}
         </p>
       )}
     </form>
-  )
+  );
 }
 
-export default ContactForm
+export default ContactForm;

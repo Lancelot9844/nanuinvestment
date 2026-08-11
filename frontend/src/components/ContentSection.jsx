@@ -1,17 +1,9 @@
-import ContentCard from './ContentCard'
+import ContentCard from "./ContentCard";
 
-function ContentSection({
-  id,
-  title,
-  items,
-  actionLabel,
-  compact = false,
-}) {
+function ContentSection({ id, title, items, actionLabel, compact = false }) {
   return (
     <section
-      className={`content-section ${
-        compact ? 'compact-section' : ''
-      }`}
+      className={`content-section ${compact ? "compact-section" : ""}`}
       id={id}
     >
       <div className="section-heading">
@@ -28,7 +20,7 @@ function ContentSection({
         ))}
       </div>
     </section>
-  )
+  );
 }
 
-export default ContentSection
+export default ContentSection;

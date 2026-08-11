@@ -1,166 +1,178 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
+import "./Popup.css";
 
-function PopupMedia({ popup }) {
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState('')
-  const [pdfPreviewFailed, setPdfPreviewFailed] = useState(false)
+function Popup({ popup, onClose }) {
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
+  const [pdfPreviewFailed, setPdfPreviewFailed] = useState(false);
 
-  useEffect(() => {
-    if (
-      popup.file_type !== 'pdf' ||
-      !popup.pdf_url
-    ) {
-      return undefined
+  if (!popup) {
+    return null;
+  }
+
+  const API_BASE_URL =
+    import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
+  const getMediaUrl = (url) => {
+    if (!url) return "";
+
+    // Already absolute
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      return url;
     }
 
-    let ignore = false
-    let objectUrl = ''
+    // Protocol-relative
+    if (url.startsWith("//")) {
+      return `${window.location.protocol}${url}`;
+    }
 
-    async function loadPdfPreview() {
+    // Django /media/ or /static/
+    if (url.startsWith("/")) {
+      return `${API_BASE_URL}${url}`;
+    }
+
+    return `${API_BASE_URL}/${url}`;
+  };
+
+  const imageUrl = getMediaUrl(popup.image_url);
+  const pdfUrl = getMediaUrl(popup.pdf_url);
+  const documentUrl = getMediaUrl(popup.document_url);
+
+  useEffect(() => {
+    if (popup.file_type !== "pdf" || !pdfUrl) {
+      return;
+    }
+
+    let cancelled = false;
+    let objectUrl = "";
+
+    const loadPdf = async () => {
       try {
-        const response = await fetch(popup.pdf_url)
+        const response = await fetch(pdfUrl);
 
         if (!response.ok) {
-          throw new Error('PDF preview failed')
+          throw new Error(`PDF request failed: ${response.status}`);
         }
 
-        const blob = await response.blob()
+        const blob = await response.blob();
 
         objectUrl = URL.createObjectURL(
           new Blob([blob], {
-            type: 'application/pdf',
+            type: "application/pdf",
           })
-        )
+        );
 
-        if (!ignore) {
-          setPdfPreviewUrl(objectUrl)
-          setPdfPreviewFailed(false)
+        if (!cancelled) {
+          setPdfPreviewUrl(objectUrl);
+          setPdfPreviewFailed(false);
         }
-      } catch {
-        if (!ignore) {
-          setPdfPreviewFailed(true)
+      } catch (error) {
+        console.error("PDF preview failed:", error);
+
+        if (!cancelled) {
+          setPdfPreviewFailed(true);
+          setPdfPreviewUrl("");
         }
       }
-    }
+    };
 
-    loadPdfPreview()
+    loadPdf();
 
     return () => {
-      ignore = true
+      cancelled = true;
 
       if (objectUrl) {
-        URL.revokeObjectURL(objectUrl)
+        URL.revokeObjectURL(objectUrl);
       }
+    };
+  }, [popup.file_type, pdfUrl]);
+
+  const handleBackdropClick = (event) => {
+    if (event.target === event.currentTarget) {
+      onClose();
     }
-  }, [popup.file_type, popup.pdf_url])
-
-  if (
-    popup.file_type === 'image' &&
-    popup.image_url
-  ) {
-    return (
-      <img
-        src={popup.image_url}
-        alt={popup.title || 'Notice'}
-        className="popup-image"
-      />
-    )
-  }
-
-  if (
-    popup.file_type === 'pdf' &&
-    popup.pdf_url
-  ) {
-    return (
-      <div className="popup-pdf">
-
-        {pdfPreviewUrl && !pdfPreviewFailed ? (
-          <iframe
-            src={pdfPreviewUrl}
-            title={popup.title || 'PDF preview'}
-            className="popup-pdf-preview"
-          />
-        ) : (
-          <div className="popup-file-fallback">
-
-            <p>
-              {popup.file_name || 'PDF notice'}
-            </p>
-
-            <a
-              href={popup.pdf_url}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Open PDF
-            </a>
-
-          </div>
-        )}
-
-      </div>
-    )
-  }
-
-  if (popup.document_url) {
-    return (
-      <div className="popup-file-fallback">
-
-        <p>
-          {popup.file_name || 'Uploaded file'}
-        </p>
-
-        <a
-          href={popup.document_url}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Open uploaded file
-        </a>
-
-      </div>
-    )
-  }
-
-  return null
-}
-
-function Popup({ popup, onClose }) {
-  if (!popup) {
-    return null
-  }
+  };
 
   return (
     <div
-      className="website-popup-overlay"
-      onClick={onClose}
+      className="website-popup-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="website-popup-title"
+      onClick={handleBackdropClick}
     >
       <article
         className="website-popup"
-        onClick={(event) =>
-          event.stopPropagation()
-        }
+        onClick={(event) => event.stopPropagation()}
       >
-
+        {/* Close button */}
         <button
           type="button"
-          className="popup-close"
+          className="website-popup-close"
           onClick={onClose}
           aria-label="Close popup"
         >
-          ×
+          &times;
         </button>
 
-        <h2>{popup.title}</h2>
+        {/* IMAGE */}
+        {popup.file_type === "image" && imageUrl && (
+          <div className="website-popup-media website-popup-image-wrapper">
+            <img
+              src={imageUrl}
+              alt={popup.title || "Popup"}
+              className="website-popup-image"
+              onError={(event) => {
+                console.error("Popup image failed to load:", imageUrl);
 
-        {popup.description && (
-          <p>{popup.description}</p>
+                event.currentTarget.style.display = "none";
+              }}
+            />
+          </div>
         )}
 
-        <PopupMedia popup={popup} />
+        {/* PDF */}
+        {popup.file_type === "pdf" && pdfUrl && (
+          <div className="website-popup-media website-popup-pdf">
+            {pdfPreviewUrl && !pdfPreviewFailed ? (
+              <iframe
+                src={pdfPreviewUrl}
+                title={popup.title || "PDF Preview"}
+                className="website-popup-pdf-frame"
+              />
+            ) : (
+              <div className="website-popup-pdf-fallback">
+                <strong>{popup.file_name || "PDF Notice"}</strong>
 
+                <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
+                  Open PDF
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* OTHER DOCUMENT */}
+        {popup.file_type !== "image" &&
+          popup.file_type !== "pdf" &&
+          documentUrl && (
+            <div className="website-popup-media website-popup-document">
+              <strong>{popup.file_name || "Uploaded file"}</strong>
+
+              <a href={documentUrl} target="_blank" rel="noopener noreferrer">
+                Open uploaded file
+              </a>
+            </div>
+          )}
+
+        {/* TITLE */}
+        {popup.title && (
+          <div className="website-popup-content">
+            <h2 id="website-popup-title">{popup.title}</h2>
+          </div>
+        )}
       </article>
     </div>
-  )
+  );
 }
 
-export default Popup
+export default Popup;
